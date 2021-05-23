@@ -2,7 +2,7 @@
 # SDK tool configuration
 #
 CONFIG_SDK_TOOLPREFIX="xtensa-esp32-elf-"
-CONFIG_SDK_PYTHON="python"
+CONFIG_SDK_PYTHON="python3"
 CONFIG_SDK_MAKE_WARN_UNDEFINED_VARIABLES=y
 
 #
