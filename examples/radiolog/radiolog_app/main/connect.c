@@ -188,14 +188,45 @@ esp_err_t common_set_connection_info(const char *ssid, const char *passwd)
 esp_err_t common_nodeId(char *id, size_t len)
 {
     uint8_t mac[6];
-    if (esp_wifi_get_mac(WIFI_MODE_STA, mac) < 0)
+    if (esp_wifi_get_mac(WIFI_MODE_STA, mac) < 0) {
+        ESP_LOGE(TAG, "Unable to get wifi mac");
         return ESP_FAIL;
+    }
 
-    if (len < sizeof("Node_AABBCC"))
+    if (len < sizeof("Node_AABBCC")) {
+        ESP_LOGE(TAG, "Buffer to short for nodeid");
         return ESP_FAIL;
+    }
 
     sprintf(id, "Node_%0x%0x%0x", mac[3], mac[4], mac[5]);
+    return ESP_OK;
+}
 
+esp_err_t _http_event_handler(esp_http_client_event_t *evt)
+{
+    switch(evt->event_id) {
+        case HTTP_EVENT_ERROR:
+            ESP_LOGD(TAG, "HTTP_EVENT_ERROR");
+            break;
+        case HTTP_EVENT_ON_CONNECTED:
+            ESP_LOGD(TAG, "HTTP_EVENT_ON_CONNECTED");
+            break;
+        case HTTP_EVENT_HEADER_SENT:
+            ESP_LOGD(TAG, "HTTP_EVENT_HEADER_SENT");
+            break;
+        case HTTP_EVENT_ON_HEADER:
+            ESP_LOGD(TAG, "HTTP_EVENT_ON_HEADER, key=%s, value=%s", evt->header_key, evt->header_value);
+            break;
+        case HTTP_EVENT_ON_DATA:
+            ESP_LOGD(TAG, "HTTP_EVENT_ON_DATA, len=%d", evt->data_len);
+            break;
+        case HTTP_EVENT_ON_FINISH:
+            ESP_LOGD(TAG, "HTTP_EVENT_ON_FINISH");
+            break;
+        case HTTP_EVENT_DISCONNECTED:
+            ESP_LOGD(TAG, "HTTP_EVENT_DISCONNECTED");
+            break;
+    }
     return ESP_OK;
 }
 
@@ -206,15 +237,22 @@ void common_ota_task(void * pvParameter)
     esp_http_client_config_t config = {
         .url = CONFIG_FIRMWARE_UPGRADE_URL,
         .cert_pem = (char *)server_cert_pem_start,
+        .event_handler = _http_event_handler,
     };
 
-    esp_err_t ret = esp_https_ota(&config);
-    if (ret == ESP_OK) {
-        esp_restart();
-    } else {
-        ESP_LOGE(TAG, "Firmware Upgrades Failed");
-    }
+    int retry = 2;
     while (1) {
+        if (retry > 0) {
+            esp_err_t ret = esp_https_ota(&config);
+            if (ret == ESP_OK) {
+                ESP_LOGI(TAG, "Firmware Upgrades Success!");
+                retry = -1;
+                //esp_restart();
+            } else {
+                ESP_LOGE(TAG, "Firmware Upgrades Failed");
+            }
+            retry--;
+        }
         vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
 }
