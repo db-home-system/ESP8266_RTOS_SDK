@@ -26,9 +26,17 @@
 #include "lwip/netdb.h"
 
 #include "esp_log.h"
-#include "mqtt_client.h"
 
 static const char *TAG = "Radiolog";
+
+void foo(const char *topic, const char *data, size_t len_data) {
+    printf("foo: %s %s\r\n", topic, data);
+}
+
+static CmdMQTT callback_table[] = {
+    { "cover/set" , foo },
+    { NULL         , NULL },
+};
 
 static void device_status(void * pvParameter)
 {
@@ -56,8 +64,9 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     ESP_ERROR_CHECK(common_connect());
 
-    mqtt_mgr_init();
+    mqtt_mgr_init(callback_table);
 
     xTaskCreate(&common_ota_task, "ota_update_task", 8192, NULL, 5, NULL);
     xTaskCreate(&device_status, "device_status_task", 8192, NULL, 5, NULL);
 }
+

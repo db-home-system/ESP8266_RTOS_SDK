@@ -14,6 +14,7 @@
 #include "esp_event.h"
 #include "esp_netif.h"
 #include "common.h"
+#include "mqtt_mgr.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -29,9 +30,26 @@
 
 static const char *TAG = "mqtt_mgr";
 
-static char node_id[24];
-static char buff[100];
+static char root_url[64];
+static char buff[120];
 static esp_mqtt_client_handle_t mqtt_client;
+
+static CmdMQTT *local_callback;
+static bool is_connect;
+
+static void mqtt_mgr_registerCallbacks(void) {
+    if (!local_callback) {
+        ESP_LOGE(TAG, "Invalid callback table.");
+        return;
+    }
+    for (int i = 0; local_callback[i].topic &&
+            local_callback[i].foo; i++) {
+        sprintf(buff, "%s/%s", root_url, local_callback[i].topic);
+        int msg_id = esp_mqtt_client_subscribe(mqtt_client, buff, 0);
+        ESP_LOGI(TAG, "subscribe %s successful, msg_id=%d", buff, msg_id);
+    }
+
+}
 
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data) {
     ESP_LOGD(TAG, "Event dispatched from event loop base=%s, event_id=%d", base, event_id);
@@ -42,16 +60,20 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     switch (event->event_id) {
         case MQTT_EVENT_CONNECTED:
             ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
-            sprintf(buff, "/radiolog/%s/", node_id);
-            msg_id = esp_mqtt_client_subscribe(client, buff, 0);
+            sprintf(buff, "%s/status", root_url);
+            msg_id = esp_mqtt_client_subscribe(client, root_url, 0);
             ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
+
+            mqtt_mgr_registerCallbacks();
+            is_connect = true;
             break;
         case MQTT_EVENT_DISCONNECTED:
+            is_connect = false;
             ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
             break;
         case MQTT_EVENT_SUBSCRIBED:
             ESP_LOGI(TAG, "MQTT_EVENT_SUBSCRIBED, msg_id=%d", event->msg_id);
-            sprintf(buff, "/radiolog/%s/status", node_id);
+            sprintf(buff, "%s/status", root_url);
             msg_id = esp_mqtt_client_publish(client, buff, "online", 0, 0, 0);
             ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
             break;
@@ -82,17 +104,23 @@ void mqtt_mgr_pub(char *topic, size_t len_topic, const char *data, size_t len_da
         return;
     }
 
-    sprintf(buff, "/radiolog/%s/%s", node_id, topic);
+    sprintf(buff, "%s/%s", root_url, topic);
     int msg_id = esp_mqtt_client_publish(mqtt_client, buff, data, len_data, 0, 0);
     ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
 }
 
-void mqtt_mgr_init(void) {
+void mqtt_mgr_init(CmdMQTT *table) {
+    assert(table);
 
+    is_connect = false;
+    local_callback = table;
+
+    char node_id[24];
     if (common_nodeId(node_id, sizeof(node_id)) < 0) {
         ESP_LOGE(TAG, "Unable to get Node ID use default");
         sprintf(node_id, "Node_UNKNOW");
     }
+    sprintf(root_url, "radiolog/%s", node_id);
 
     esp_mqtt_client_config_t mqtt_cfg = {
         .uri = CONFIG_BROKER_URL,
