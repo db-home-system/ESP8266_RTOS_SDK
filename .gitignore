@@ -44,3 +44,5 @@ docs/doxygen_sqlite3.db
 .DS_Store
 
 server_certs/
+radiolog_app.bin
+tags
