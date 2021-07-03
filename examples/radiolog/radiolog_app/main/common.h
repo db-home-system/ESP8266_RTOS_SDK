@@ -38,7 +38,7 @@ esp_err_t common_set_connection_info(const char *ssid, const char *passwd);
 esp_err_t common_nodeId(char *id, size_t len);
 void common_ota_task(void * pvParameter);
 
-
+// Simple help for delay functions
 #define DELAY_S(s)    (vTaskDelay(((s) * 1000) / portTICK_PERIOD_MS))
 #define DELAY_MS(ms)  (vTaskDelay((ms) / portTICK_PERIOD_MS))
 

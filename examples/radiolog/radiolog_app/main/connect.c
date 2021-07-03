@@ -253,7 +253,7 @@ void common_ota_task(void * pvParameter)
             }
             retry--;
         }
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        DELAY_S(1);
     }
 }
 

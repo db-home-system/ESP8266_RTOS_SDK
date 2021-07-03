@@ -13,7 +13,9 @@
 #include "nvs_flash.h"
 #include "esp_event.h"
 #include "esp_netif.h"
+
 #include "common.h"
+#include "cover.h"
 #include "mqtt_mgr.h"
 
 #include "freertos/FreeRTOS.h"
@@ -28,6 +30,7 @@
 #include "esp_log.h"
 
 static const char *TAG = "Radiolog";
+static cover_ctx_t cover_ctx;
 
 void cmd_coverSet(const char *topic, size_t len_topic, const char *data, size_t len_data) {
     printf("foo TOPIC=%.*s\r\n", len_topic, topic);
@@ -66,8 +69,9 @@ void app_main(void)
     ESP_ERROR_CHECK(common_connect());
 
     mqtt_mgr_init(callback_table);
+    cover_init(&cover_ctx);
 
     xTaskCreate(&common_ota_task, "ota_update_task", 8192, NULL, 5, NULL);
-    xTaskCreate(&device_status, "device_status_task", 8192, NULL, 5, NULL);
+    xTaskCreate(&device_status, "device_status_task", 8192, NULL, tskIDLE_PRIORITY, NULL);
 }
 
