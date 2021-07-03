@@ -9,7 +9,7 @@
 #include <stddef.h>
 #include <string.h>
 
-typedef void (*mqtt_sub_callback_t)(const char *topic, const char *data, size_t len_data);
+typedef void (*mqtt_sub_callback_t)(const char *topic, size_t len_topic, const char *data, size_t len_data);
 typedef struct CmdMQTT {
     const char *topic;
     mqtt_sub_callback_t foo;

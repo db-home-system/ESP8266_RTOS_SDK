@@ -29,19 +29,20 @@
 
 static const char *TAG = "Radiolog";
 
-void foo(const char *topic, const char *data, size_t len_data) {
-    printf("foo: %s %s\r\n", topic, data);
+void cmd_coverSet(const char *topic, size_t len_topic, const char *data, size_t len_data) {
+    printf("foo TOPIC=%.*s\r\n", len_topic, topic);
+    printf("foo DATA=%.*s\r\n", len_data, data);
 }
 
 static CmdMQTT callback_table[] = {
-    { "cover/set" , foo },
-    { NULL         , NULL },
+    { "cover/set" , cmd_coverSet } ,
+    { NULL        , NULL }         ,
 };
 
 static void device_status(void * pvParameter)
 {
     while (1) {
-        vTaskDelay(10000 / portTICK_PERIOD_MS);
+        DELAY_S(10);
         mqtt_mgr_pub("test", sizeof("test"), "data", sizeof("data"));
     }
 }
