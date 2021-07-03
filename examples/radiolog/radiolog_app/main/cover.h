@@ -9,15 +9,21 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+typedef void (*cover_event_t)(uint8_t status, uint16_t position);
+
 typedef struct CoverCtx {
+    uint8_t status;
     uint16_t curr_pos;
     uint16_t target_pos;
     uint16_t direction;
     uint32_t on_ticks;
+    uint32_t ticks_th_stop;
     TaskHandle_t run_handler;
+    cover_event_t callback;
 } cover_ctx_t;
+
 
 
 void cover_run(int position);
 void cover_stop(void);
-void cover_init(cover_ctx_t *ctx);
+void cover_init(cover_ctx_t *ctx, cover_event_t callback);

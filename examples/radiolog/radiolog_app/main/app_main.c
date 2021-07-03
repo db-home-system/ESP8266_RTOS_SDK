@@ -68,10 +68,11 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     ESP_ERROR_CHECK(common_connect());
 
-    mqtt_mgr_init(callback_table);
-    cover_init(&cover_ctx);
-
     xTaskCreate(&common_ota_task, "ota_update_task", 8192, NULL, 5, NULL);
-    xTaskCreate(&device_status, "device_status_task", 8192, NULL, tskIDLE_PRIORITY, NULL);
+
+    mqtt_mgr_init(callback_table);
+    xTaskCreate(&device_status, "device_status_task", 8192, NULL, 5, NULL);
+
+    cover_init(&cover_ctx, NULL);
 }
 
