@@ -63,7 +63,6 @@ static mqtt_sub_callback_t mqtt_mgr_searchFoo(const char *topic, size_t len) {
 
         static char buff2[240];
         sprintf(buff2, "%s/%s", root_url, local_callback[i].topic);
-        ESP_LOGW(TAG, "%s %s\n", buff, buff2);
         if (!strcmp(buff, buff2)) {
             return local_callback[i].foo;
         }
@@ -72,37 +71,30 @@ static mqtt_sub_callback_t mqtt_mgr_searchFoo(const char *topic, size_t len) {
 }
 
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data) {
-    ESP_LOGD(TAG, "Event dispatched from event loop base=%s, event_id=%d", base, event_id);
+    //ESP_LOGD(TAG, "Event dispatched from event loop base=%s, event_id=%d", base, event_id);
     esp_mqtt_event_handle_t event = (esp_mqtt_event_handle_t)event_data;
-    esp_mqtt_client_handle_t client = event->client;
-    int msg_id;
-    // your_context_t *context = event_data->context;
     switch (event->event_id) {
         case MQTT_EVENT_CONNECTED:
             ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
-
-            sprintf(buff, "%s/status", root_url);
-            msg_id = esp_mqtt_client_publish(client, buff, "online", 0, 0, 0);
-            ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
             mqtt_mgr_registerCallbacks();
             is_connect = true;
-
             break;
+
         case MQTT_EVENT_DISCONNECTED:
             is_connect = false;
             ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
             break;
 
         case MQTT_EVENT_DATA:
-            ESP_LOGI(TAG, "MQTT_EVENT_DATA");
-            printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
-            printf("DATA=%.*s\r\n", event->data_len, event->data);
-
+            ESP_LOGW(TAG, "MQTT_EVENT_DATA");
+            ESP_LOGW(TAG, "TOPIC=%.*s", event->topic_len, event->topic);
+            ESP_LOGW(TAG, "DATA=%.*s", event->data_len, event->data);
             mqtt_sub_callback_t handler = mqtt_mgr_searchFoo(event->topic, event->topic_len);
-            if (handler)
+            if (handler) {
+                ESP_LOGW(TAG, "Run callback..");
                 handler(event->topic, event->topic_len, event->data, event->data_len);
+            }
             break;
-
 
         default:
             ESP_LOGI(TAG, "MQTT_EVENT id:%d, msg_id=%d", event->event_id, event->msg_id);
@@ -111,6 +103,10 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
 }
 
 void mqtt_mgr_pub(char *topic, size_t len_topic, const char *data, size_t len_data) {
+    if(!is_connect) {
+        ESP_LOGE(TAG, "MQTT client is not connect");
+        return;
+    }
 
     if (len_topic > sizeof(buff)) {
         ESP_LOGE(TAG, "Topic to long! check internal buff lenght.");
@@ -137,6 +133,8 @@ void mqtt_mgr_init(CmdMQTT *table) {
 
     esp_mqtt_client_config_t mqtt_cfg = {
         .uri = CONFIG_BROKER_URL,
+        .lwt_qos = 0,
+        .lwt_retain = 0,
     };
 
     mqtt_client = esp_mqtt_client_init(&mqtt_cfg);

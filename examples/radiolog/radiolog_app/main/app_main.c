@@ -32,21 +32,65 @@
 static const char *TAG = "Radiolog";
 static cover_ctx_t cover_ctx;
 
-void cmd_coverSet(const char *topic, size_t len_topic, const char *data, size_t len_data) {
-    printf("foo TOPIC=%.*s\r\n", len_topic, topic);
-    printf("foo DATA=%.*s\r\n", len_data, data);
+void cmd_coverSetPos(const char *topic, size_t len_topic, const char *data, size_t len_data) {
+    if (len_data == 0 && !data) {
+        ESP_LOGE(TAG, "Invalid paylod in cover set");
+        return;
+    }
+    cover_run(atoi(data));
 }
 
+void cmd_coverSet(const char *topic, size_t len_topic, const char *data, size_t len_data) {
+    if (len_data == 0 && !data) {
+        ESP_LOGE(TAG, "Invalid paylod in cover set");
+        return;
+    }
+
+    if (!strncmp("OPEN", data, len_data)) {
+        cover_run(100);
+        return;
+    }
+
+    if (!strncmp("CLOSE", data, len_data)) {
+        cover_run(0);
+        return;
+    }
+
+}
+
+void cmd_reset(const char *topic, size_t len_topic, const char *data, size_t len_data) {
+    esp_restart();
+}
+
+#define MQTT_TOPIC_ANNOUNCE  "cover/announce"
+#define MQTT_TOPIC_STATUS    "cover/status"
+#define MQTT_TOPIC_SET_POS   "cover/set_position"
+#define MQTT_TOPIC_POS       "cover/pos"
+#define MQTT_TOPIC_SET       "cover/set"
+#define MQTT_TOPIC_AVAILABLE "cover/available"
+#define MQTT_TOPIC_RESET     "reset"
+
 static CmdMQTT callback_table[] = {
-    { "cover/set" , cmd_coverSet } ,
-    { NULL        , NULL }         ,
+    { MQTT_TOPIC_SET     , cmd_coverSet }    ,
+    { MQTT_TOPIC_SET_POS , cmd_coverSetPos } ,
+    { MQTT_TOPIC_RESET   , cmd_reset }       ,
+    { NULL               , NULL }            ,
 };
 
+
+static bool announce = true;
 static void device_status(void * pvParameter)
 {
     while (1) {
-        DELAY_S(10);
-        mqtt_mgr_pub("test", sizeof("test"), "data", sizeof("data"));
+        if(announce) {
+            mqtt_mgr_pub(MQTT_TOPIC_ANNOUNCE, sizeof(MQTT_TOPIC_ANNOUNCE), "announce", sizeof("announce") -1);
+            mqtt_mgr_pub(MQTT_TOPIC_AVAILABLE, sizeof(MQTT_TOPIC_AVAILABLE), "online", sizeof("online") -1);
+            announce = false;
+        }
+        mqtt_mgr_pub(MQTT_TOPIC_STATUS, sizeof(MQTT_TOPIC_STATUS), "open", sizeof("open") -1);
+        mqtt_mgr_pub(MQTT_TOPIC_POS, sizeof(MQTT_TOPIC_POS), "pos", sizeof("pos") -1);
+
+        DELAY_S(30);
     }
 }
 
@@ -68,7 +112,8 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     ESP_ERROR_CHECK(common_connect());
 
-    xTaskCreate(&common_ota_task, "ota_update_task", 8192, NULL, 5, NULL);
+    // check if we should update the fw via ota
+    common_ota_task();
 
     mqtt_mgr_init(callback_table);
     xTaskCreate(&device_status, "device_status_task", 8192, NULL, 5, NULL);

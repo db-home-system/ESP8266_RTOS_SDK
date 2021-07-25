@@ -22,8 +22,6 @@ typedef struct CoverCtx {
     cover_event_t callback;
 } cover_ctx_t;
 
-
-
 void cover_run(int position);
 void cover_stop(void);
 void cover_init(cover_ctx_t *ctx, cover_event_t callback);
