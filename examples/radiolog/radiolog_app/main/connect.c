@@ -230,7 +230,7 @@ esp_err_t _http_event_handler(esp_http_client_event_t *evt)
     return ESP_OK;
 }
 
-void common_ota_task(void * pvParameter)
+void common_ota_task(void)
 {
     ESP_LOGI(TAG, "Starting OTA...");
 
@@ -240,20 +240,16 @@ void common_ota_task(void * pvParameter)
         .event_handler = _http_event_handler,
     };
 
-    int retry = 2;
-    while (1) {
-        if (retry > 0) {
-            esp_err_t ret = esp_https_ota(&config);
-            if (ret == ESP_OK) {
-                ESP_LOGI(TAG, "Firmware Upgrades Success!");
-                retry = -1;
-                //esp_restart();
-            } else {
-                ESP_LOGE(TAG, "Firmware Upgrades Failed");
-            }
-            retry--;
+    for (int i = 0; i < OTA_MAX_RETRY; i++) {
+        esp_err_t ret = esp_https_ota(&config);
+        if (ret == ESP_OK) {
+            ESP_LOGI(TAG, "Firmware Upgrades Success!");
+            return;
+            //esp_restart();
         }
-        DELAY_S(1);
+
+        DELAY_S(i + 1);
     }
+    ESP_LOGE(TAG, "Firmware Upgrades Failed");
 }
 

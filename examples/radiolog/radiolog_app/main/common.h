@@ -16,6 +16,8 @@ extern "C" {
 #include "esp_err.h"
 #include "tcpip_adapter.h"
 
+#define OTA_MAX_RETRY 2
+
 #define RADIOLOG_INTERFACE TCPIP_ADAPTER_IF_STA
 
 /**
@@ -36,7 +38,7 @@ esp_err_t common_disconnect(void);
 esp_err_t common_set_connection_info(const char *ssid, const char *passwd);
 
 esp_err_t common_nodeId(char *id, size_t len);
-void common_ota_task(void * pvParameter);
+void common_ota_task();
 
 // Simple help for delay functions
 #define DELAY_S(s)    (vTaskDelay(((s) * 1000) / portTICK_PERIOD_MS))
