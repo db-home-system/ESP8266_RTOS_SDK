@@ -8,6 +8,9 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
+
+#include <dht.h>
+
 #include "esp_wifi.h"
 #include "esp_system.h"
 #include "nvs_flash.h"
@@ -56,6 +59,11 @@ void cmd_coverSet(const char *topic, size_t len_topic, const char *data, size_t 
         return;
     }
 
+    if (!strncmp("STOP", data, len_data)) {
+        cover_stop();
+        return;
+    }
+
 }
 
 void cmd_reset(const char *topic, size_t len_topic, const char *data, size_t len_data) {
@@ -77,7 +85,6 @@ static CmdMQTT callback_table[] = {
     { NULL               , NULL }            ,
 };
 
-
 static bool announce = true;
 static void device_status(void * pvParameter)
 {
@@ -89,6 +96,14 @@ static void device_status(void * pvParameter)
         }
         mqtt_mgr_pub(MQTT_TOPIC_STATUS, sizeof(MQTT_TOPIC_STATUS), "open", sizeof("open") -1);
         mqtt_mgr_pub(MQTT_TOPIC_POS, sizeof(MQTT_TOPIC_POS), "pos", sizeof("pos") -1);
+
+        int16_t temperature = 0;
+        int16_t humidity = 0;
+        if (dht_read_data(DHT_TYPE_DHT11, 2, &humidity, &temperature) == ESP_OK)
+            printf("Humidity: %d%% Temp: %dC\n", humidity, temperature);
+        else
+            printf("Could not read data from sensor\n");
+
 
         DELAY_S(30);
     }
@@ -119,5 +134,6 @@ void app_main(void)
     xTaskCreate(&device_status, "device_status_task", 8192, NULL, 5, NULL);
 
     cover_init(&cover_ctx, NULL);
+
 }
 
