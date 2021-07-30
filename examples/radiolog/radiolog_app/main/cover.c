@@ -34,7 +34,7 @@
 #define COVER_TRAVEL_TIME_UP 25
 #define COVER_TRAVEL_TIME_DOWN 24
 
-#define POS_TO_TICKS(p, tt) (((((tt) * 1000) / COVER_POLLING_TIME) / 100) * (p))
+#define POS_TO_TICKS(p, tt) ((((tt) * 1000) / COVER_POLLING_TIME)  * (p) / 100)
 
 static const char *TAG = "cover";
 
@@ -52,6 +52,7 @@ static uint16_t ticks_to_pos(cover_ctx_t *ctx) {
 
 
 static void motor_off(void) {
+    ESP_LOGW(TAG, "Motor off");
     vTaskSuspend(local_ctx->run_handler);
     TRIAC_OFF();
 
@@ -77,6 +78,7 @@ static void cover_run_handler(void * pvParameter)
 }
 
 void cover_run(int position) {
+
     // we are just in the same position, do nothing
     if(local_ctx->curr_pos == position)
         return;
