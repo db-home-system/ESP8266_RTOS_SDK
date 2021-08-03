@@ -19,9 +19,12 @@ typedef struct CoverCtx {
     uint32_t on_ticks;
     uint32_t ticks_th_stop;
     TaskHandle_t run_handler;
-    cover_event_t callback;
+    cover_event_t callback_end;
+    cover_event_t callback_run;
 } cover_ctx_t;
 
 void cover_run(int position);
 void cover_stop(void);
-void cover_init(cover_ctx_t *ctx, cover_event_t callback);
+int cover_status(char *st_str, size_t len);
+int cover_position(char *st_str, size_t len);
+void cover_init(cover_ctx_t *ctx, cover_event_t callback_end, cover_event_t callback_run);
