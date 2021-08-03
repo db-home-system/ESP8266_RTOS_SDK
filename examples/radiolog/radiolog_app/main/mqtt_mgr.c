@@ -14,6 +14,7 @@
 #include "esp_event.h"
 #include "esp_netif.h"
 #include "common.h"
+#include "connect.h"
 #include "mqtt_mgr.h"
 
 #include "freertos/FreeRTOS.h"

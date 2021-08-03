@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include "common.h"
+#include "connect.h"
 #include "sdkconfig.h"
 #include "esp_event.h"
 #include "esp_wifi.h"
