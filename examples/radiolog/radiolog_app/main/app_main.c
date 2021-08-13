@@ -9,7 +9,7 @@
 #include <stddef.h>
 #include <string.h>
 
-#include <dht.h>
+#include <button.h>
 
 #include "esp_wifi.h"
 #include "esp_system.h"
@@ -18,8 +18,10 @@
 #include "esp_netif.h"
 
 #include "common.h"
+#include "connect.h"
 #include "cover.h"
 #include "mqtt_mgr.h"
+#include "cfg.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -32,8 +34,14 @@
 
 #include "esp_log.h"
 
+#define BUTTON_UP    0  // D3
+#define BUTTON_DOWN  4 // D6
+
 static const char *TAG = "Radiolog";
+
 static cover_ctx_t cover_ctx;
+static button_t btn_up, btn_down;
+
 
 void cmd_coverSetPos(const char *topic, size_t len_topic, const char *data, size_t len_data) {
     if (len_data == 0 && !data) {
@@ -49,17 +57,17 @@ void cmd_coverSet(const char *topic, size_t len_topic, const char *data, size_t 
         return;
     }
 
-    if (!strncmp("OPEN", data, len_data)) {
+    if (!strncmp("open", data, len_data)) {
         cover_run(100);
         return;
     }
 
-    if (!strncmp("CLOSE", data, len_data)) {
+    if (!strncmp("close", data, len_data)) {
         cover_run(0);
         return;
     }
 
-    if (!strncmp("STOP", data, len_data)) {
+    if (!strncmp("stop", data, len_data)) {
         cover_stop();
         return;
     }
@@ -76,16 +84,23 @@ void cmd_reset(const char *topic, size_t len_topic, const char *data, size_t len
 #define MQTT_TOPIC_POS       "cover/pos"
 #define MQTT_TOPIC_SET       "cover/set"
 #define MQTT_TOPIC_AVAILABLE "cover/available"
+#define MQTT_TOPIC_MEAS      "measure"
 #define MQTT_TOPIC_RESET     "reset"
 
+#define MQTT_TOPIC_READ_CFG  "cfg/read"
+#define MQTT_TOPIC_WRITE_CFG "cfg/write"
+
 static CmdMQTT callback_table[] = {
-    { MQTT_TOPIC_SET     , cmd_coverSet }    ,
-    { MQTT_TOPIC_SET_POS , cmd_coverSetPos } ,
-    { MQTT_TOPIC_RESET   , cmd_reset }       ,
-    { NULL               , NULL }            ,
+    { MQTT_TOPIC_SET       , cmd_coverSet }    ,
+    { MQTT_TOPIC_SET_POS   , cmd_coverSetPos } ,
+    { MQTT_TOPIC_RESET     , cmd_reset }       ,
+    { MQTT_TOPIC_READ_CFG  , cmd_readCfg }     ,
+    { MQTT_TOPIC_WRITE_CFG , cmd_writeCfg }    ,
+    { NULL                 , NULL }            ,
 };
 
 static bool announce = true;
+static char json_str[250];
 static void device_status(void * pvParameter)
 {
     while (1) {
@@ -94,19 +109,70 @@ static void device_status(void * pvParameter)
             mqtt_mgr_pub(MQTT_TOPIC_AVAILABLE, sizeof(MQTT_TOPIC_AVAILABLE), "online", sizeof("online") -1);
             announce = false;
         }
-        mqtt_mgr_pub(MQTT_TOPIC_STATUS, sizeof(MQTT_TOPIC_STATUS), "open", sizeof("open") -1);
-        mqtt_mgr_pub(MQTT_TOPIC_POS, sizeof(MQTT_TOPIC_POS), "pos", sizeof("pos") -1);
 
-        int16_t temperature = 0;
-        int16_t humidity = 0;
-        if (dht_read_data(DHT_TYPE_DHT11, 2, &humidity, &temperature) == ESP_OK)
-            printf("Humidity: %d%% Temp: %dC\n", humidity, temperature);
-        else
-            printf("Could not read data from sensor\n");
+        int ret = read_dht11(json_str, sizeof(json_str));
+        if (ret != ESP_FAIL)
+            mqtt_mgr_pub(MQTT_TOPIC_MEAS, sizeof(MQTT_TOPIC_MEAS), json_str, ret);
 
+        ret = cover_status(json_str, sizeof(json_str));
+        if (ret != ESP_FAIL)
+            mqtt_mgr_pub(MQTT_TOPIC_STATUS, sizeof(MQTT_TOPIC_STATUS), json_str, ret);
+
+        ret = cover_position(json_str, sizeof(json_str));
+        if (ret != ESP_FAIL)
+            mqtt_mgr_pub(MQTT_TOPIC_POS, sizeof(MQTT_TOPIC_POS), json_str, ret);
 
         DELAY_S(30);
     }
+}
+
+static void event_cover_stop(uint8_t status, uint16_t position) {
+    int ret = cover_status(json_str, sizeof(json_str));
+    if (ret != ESP_FAIL)
+        mqtt_mgr_pub(MQTT_TOPIC_STATUS, sizeof(MQTT_TOPIC_STATUS), json_str, ret);
+
+    ret = cover_position(json_str, sizeof(json_str));
+    if (ret != ESP_FAIL)
+        mqtt_mgr_pub(MQTT_TOPIC_POS, sizeof(MQTT_TOPIC_POS), json_str, ret);
+}
+
+static uint16_t cover_running = 0;
+static void event_cover_run(uint8_t status, uint16_t position) {
+    if (cover_running == 10) {
+        memset(json_str, 0, sizeof(json_str));
+        int ret = sprintf(json_str,
+            "{\"position\":\"%d\", \"status\":\"%d\"}",
+            position, status);
+        mqtt_mgr_pub(MQTT_TOPIC_POS, sizeof(MQTT_TOPIC_POS), json_str, ret);
+        cover_running = 0;
+    }
+    cover_running++;
+}
+
+static const char *states[] = {
+    [BUTTON_PRESSED]      = "pressed",
+    [BUTTON_RELEASED]     = "released",
+    [BUTTON_CLICKED]      = "clicked",
+    [BUTTON_PRESSED_LONG] = "pressed long",
+};
+
+static void on_button(button_t *btn, button_state_t state)
+{
+    ESP_LOGI(TAG, "%s button %s", btn == &btn_up ? "up" : "down", states[state]);
+
+    if (state == BUTTON_PRESSED || state == BUTTON_PRESSED_LONG) {
+        if (btn == &btn_up) {
+            cover_run(100);
+            return;
+        }
+
+        if (btn == &btn_down) {
+            cover_run(0);
+            return;
+        }
+    }
+
+    cover_stop();
 }
 
 void app_main(void)
@@ -130,10 +196,23 @@ void app_main(void)
     // check if we should update the fw via ota
     common_ota_task();
 
+    btn_up.gpio = BUTTON_UP;
+    btn_up.pressed_level = 0;
+    btn_up.internal_pull = true;
+    btn_up.autorepeat = false;
+    btn_up.callback = on_button;
+
+    btn_down.gpio = BUTTON_DOWN;
+    btn_down.pressed_level = 0;
+    btn_down.internal_pull = true;
+    btn_down.autorepeat = false;
+    btn_down.callback = on_button;
+
     mqtt_mgr_init(callback_table);
+    cover_init(&cover_ctx, event_cover_stop, event_cover_run);
+    ESP_ERROR_CHECK(button_init(&btn_down));
+    ESP_ERROR_CHECK(button_init(&btn_up));
+
     xTaskCreate(&device_status, "device_status_task", 8192, NULL, 5, NULL);
-
-    cover_init(&cover_ctx, NULL);
-
 }
 
