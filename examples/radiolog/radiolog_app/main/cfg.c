@@ -10,6 +10,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include "esp_partition.h"
 #include "common.h"
@@ -45,68 +46,150 @@ static const cfgmap_t map[] = {
     { NULL                   , 0 },
 };
 
-static uint8_t tmp_data[128];
-void cmd_readCfg(const char *topic, size_t len_topic, const char *data, size_t len_data) {
-    ESP_LOGI(TAG, "read");
+#define NOVALUE 0xFFFFFFFF
+
+static esp_err_t cfg_dump(void) {
+    ESP_LOGW(TAG, "dump");
+    // Get key, go to read value in config partition
     const esp_partition_t *prt = esp_partition_find_first(ESP_PARTITION_TYPE_DATA,
             ESP_PARTITION_SUBTYPE_DATA_NVS, "config");
+
     if(prt) {
-        esp_err_t ret = esp_partition_read(prt, 0, (uint8_t *)tmp_data, sizeof(tmp_data));
-        ESP_LOGI(TAG, "find partition %d %d %s", ret, prt->address, prt->label);
-        if (ret == ESP_OK)
-            for (int i = 0; i < sizeof(tmp_data); i++) {
-                printf("%0x ", tmp_data[i]);
-                if (!(i % 8))
-                    printf("\n");
+        ESP_LOGI(TAG, "Get partition %d %s", prt->address, prt->label);
+        for (size_t i = 0; i < prt->size / SPI_FLASH_SEC_SIZE; i++) {
+            uint32_t tmp[SPI_FLASH_SEC_SIZE/sizeof(uint32_t)];
+
+            esp_err_t ret = esp_partition_read(prt, i * SPI_FLASH_SEC_SIZE,\
+                    (uint8_t *)tmp, sizeof(tmp));
+            if (ret == ESP_OK) {
+                for (int j = 0; j < SPI_FLASH_SEC_SIZE/sizeof(uint32_t); j++) {
+                    printf("%0x ", tmp[j]);
+                    if (!(j%8) && j)
+                        printf("\n");
+                }
+            } else {
+                ESP_LOGE(TAG, "Unable to read block [%d]", ret);
+                return ESP_FAIL;
             }
+        }
     }
+    return ESP_OK;
+}
+
+
+static esp_err_t cfg_readKey(const char *key, size_t len_key, uint32_t *value) {
+    ESP_LOGW(TAG, "Read: %.*s", len_key, key);
+    *value = NOVALUE;
+    for (size_t i = 0; map[i].key && map[i].len; i++) {
+        if (!strncmp(key, map[i].key, len_key)) {
+            ESP_LOGI(TAG, "key: %s", map[i].key);
+
+            // Get key, go to read value in config partition
+            const esp_partition_t *prt = esp_partition_find_first(ESP_PARTITION_TYPE_DATA,
+                    ESP_PARTITION_SUBTYPE_DATA_NVS, "config");
+
+            if(prt) {
+                ESP_LOGI(TAG, "Get partition %d %s", prt->address, prt->label);
+                size_t offset = i * sizeof(uint32_t);
+                esp_err_t ret = esp_partition_read(prt, offset, (uint8_t *)value, sizeof(uint32_t));
+                if (ret != ESP_OK) {
+                    ESP_LOGE(TAG, "Unable to read data [%d]", ret);
+                    return ESP_FAIL;
+                } else {
+                    return ESP_OK;
+                }
+            }
+        }
+
+    }
+    return ESP_FAIL;
+}
+
+
+static esp_err_t cfg_writeKey(const char *key, size_t len_key, uint32_t value) {
+    ESP_LOGW(TAG, "Write: %.*s [%d]", len_key, key, value);
+    for (size_t i = 0; map[i].key && map[i].len; i++) {
+        if (!strncmp(key, map[i].key, len_key)) {
+
+            // Get key, go to read value in config partition
+            const esp_partition_t *prt = esp_partition_find_first(ESP_PARTITION_TYPE_DATA,
+                    ESP_PARTITION_SUBTYPE_DATA_NVS, "config");
+
+            if(prt) {
+                size_t offset = i * sizeof(uint32_t);
+                ESP_LOGI(TAG, "key: %s offset: %d size: %d", map[i].key, offset, sizeof(uint32_t));
+                ESP_LOGI(TAG, "Get partition %d %s %d", prt->address, prt->label, prt->size);
+
+                // read block page to chage, we like aligned to 32bit
+                uint32_t tmp[SPI_FLASH_SEC_SIZE/sizeof(uint32_t)];
+                size_t page = (offset / SPI_FLASH_SEC_SIZE) * SPI_FLASH_SEC_SIZE;
+
+
+                esp_err_t ret = esp_partition_read(prt, page, (uint8_t *)tmp, sizeof(tmp));
+                if (ret != ESP_OK) {
+                    ESP_LOGE(TAG, "Unable to read data block [%d]", ret);
+                    return ret;
+                }
+
+                ret = esp_partition_erase_range(prt, page, SPI_FLASH_SEC_SIZE);
+                if (ret != ESP_OK) {
+                    ESP_LOGE(TAG, "Unable to erase partition block [%d]", ret);
+                    return ret;
+                }
+                tmp[offset/sizeof(uint32_t)] = value;
+                ESP_LOGI(TAG, "page %d off %d v %d", page, offset, value);
+
+                ret = esp_partition_write(prt, page, (char *)tmp, sizeof(tmp));
+                if (ret != ESP_OK) {
+                    ESP_LOGE(TAG, "Unable to write data block [%d]", ret);
+                    return ret;
+                } else {
+                    return ESP_OK;
+                }
+            }
+        }
+
+    }
+    return ESP_FAIL;
+}
+
+void cmd_readCfg(const char *topic, size_t len_topic, const char *data, size_t len_data) {
+    ESP_LOGI(TAG, "read");
+
+    uint32_t raw_value;
+    esp_err_t ret = cfg_readKey(data, len_data, &raw_value);
+    if (ret == ESP_OK)
+        ESP_LOGI(TAG, ">> %d << %.*s", raw_value, len_data, data);
+
 }
 
 void cmd_writeCfg(const char *topic, size_t len_topic, const char *data, size_t len_data) {
     ESP_LOGI(TAG, "write");
 
-    size_t key_len = 0;
+    size_t len_key = 0;
     bool found_key = false;
     char *value = NULL;
     for(size_t i = 0; i < len_data; i++) {
         if(data[i] == ':') {
-            key_len = i - 1;
+            len_key = i;
             if ((i + 1) < len_data)
                 value = (char *)&data[i+1];
             found_key = true;
         }
     }
 
-    size_t offset = 0;
     if (found_key) {
-        ESP_LOGW(TAG, "%.*s", len_data, data);
-        for (size_t i = 0; map[i].key && map[i].len; i++) {
-            printf("> %s\n", map[i].key);
-            //offset += map[i].key_len;
-            if (!strncmp(data, map[i].key, key_len)) {
-                printf("key: %s\n", map[i].key);
-                if (value) {
-                    printf("value: %s\n", value);
-                }
-
-                //const esp_partition_t *prt = esp_partition_find_first(ESP_PARTITION_TYPE_DATA,
-                //        ESP_PARTITION_SUBTYPE_DATA_NVS, "config");
-                //if(prt) {
-                //    esp_err_t ret = esp_partition_read(prt, 0, (uint8_t *)tmp_data, sizeof(tmp_data));
-                //    ESP_LOGI(TAG, "find partition %d %d %s", ret, prt->address, prt->label);
-                //    if (ret == ESP_OK)
-                //        for (int i = 0; i < sizeof(tmp_data); i++) {
-                //            printf("%0x ", tmp_data[i]);
-                //            if (!(i % 8))
-                //                printf("\n");
-                //        }
-                //}
-
-            }
-        }
+        char *p;
+        uint32_t v = strtol(value, &p, 10);
+        esp_err_t ret = cfg_writeKey(data, len_key, v);
+        if (ret == ESP_OK)
+            ESP_LOGI(TAG, ">> %d << %.*s", v, len_key, data);
     }
 }
 
+void cmd_dumpCfg(const char *topic, size_t len_topic, const char *data, size_t len_data) {
+    cfg_dump();
+}
 
 void cmd_initCfg(void) {
 }

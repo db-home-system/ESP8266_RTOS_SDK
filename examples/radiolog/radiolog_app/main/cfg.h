@@ -11,6 +11,7 @@
 
 void cmd_readCfg(const char *topic, size_t len_topic, const char *data, size_t len_data);
 void cmd_writeCfg(const char *topic, size_t len_topic, const char *data, size_t len_data);
+void cmd_dumpCfg(const char *topic, size_t len_topic, const char *data, size_t len_data);
 void cmd_initCfg(void);
 
 

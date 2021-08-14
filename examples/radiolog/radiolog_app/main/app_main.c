@@ -89,14 +89,16 @@ void cmd_reset(const char *topic, size_t len_topic, const char *data, size_t len
 
 #define MQTT_TOPIC_READ_CFG  "cfg/read"
 #define MQTT_TOPIC_WRITE_CFG "cfg/write"
+#define MQTT_TOPIC_DUMP_CFG "cfg/dump"
 
 static CmdMQTT callback_table[] = {
-    { MQTT_TOPIC_SET       , cmd_coverSet }    ,
+    { MQTT_TOPIC_SET       , cmd_coverSet    } ,
     { MQTT_TOPIC_SET_POS   , cmd_coverSetPos } ,
-    { MQTT_TOPIC_RESET     , cmd_reset }       ,
-    { MQTT_TOPIC_READ_CFG  , cmd_readCfg }     ,
-    { MQTT_TOPIC_WRITE_CFG , cmd_writeCfg }    ,
-    { NULL                 , NULL }            ,
+    { MQTT_TOPIC_RESET     , cmd_reset       } ,
+    { MQTT_TOPIC_READ_CFG  , cmd_readCfg     } ,
+    { MQTT_TOPIC_WRITE_CFG , cmd_writeCfg    } ,
+    { MQTT_TOPIC_DUMP_CFG  , cmd_dumpCfg      } ,
+    { NULL                 , NULL            } ,
 };
 
 static bool announce = true;
