@@ -34,6 +34,20 @@
 
 #include "esp_log.h"
 
+#define MQTT_TOPIC_ANNOUNCE  "cover/announce"
+#define MQTT_TOPIC_STATUS    "cover/status"
+#define MQTT_TOPIC_SET_POS   "cover/set_position"
+#define MQTT_TOPIC_POS       "cover/pos"
+#define MQTT_TOPIC_SET       "cover/set"
+#define MQTT_TOPIC_AVAILABLE "cover/available"
+#define MQTT_TOPIC_MEAS      "measure"
+#define MQTT_TOPIC_RESET     "reset"
+
+#define MQTT_TOPIC_READ_CFG  "cfg/read"
+#define MQTT_TOPIC_WRITE_CFG "cfg/write"
+#define MQTT_TOPIC_DUMP_CFG  "cfg/dump"
+
+
 #define BUTTON_UP    0  // D3
 #define BUTTON_DOWN  4 // D6
 
@@ -41,6 +55,55 @@ static const char *TAG = "Radiolog";
 
 static cover_ctx_t cover_ctx;
 static button_t btn_up, btn_down;
+static char json_str[250];
+static bool data_ready = false;
+static int json_str_len = 0;
+static bool meas_ready = false;
+
+void cmd_readCfg(const char *topic, size_t len_topic, const char *data, size_t len_data) {
+    memset(json_str, 0, sizeof(json_str));
+
+    uint32_t raw_value = CFG_NOVALUE;
+    esp_err_t ret = cfg_readKey(data, len_data, &raw_value);
+    if (ret == ESP_OK) {
+        json_str_len = sprintf(json_str,
+            "{\"%.*s\":\"%d\"}",
+            len_data, data, raw_value);
+    }
+
+    if (json_str_len != ESP_FAIL) {
+        ESP_LOGI(TAG, "read: %.*s", json_str_len, json_str);
+        data_ready = true;
+    }
+}
+
+void cmd_writeCfg(const char *topic, size_t len_topic, const char *data, size_t len_data) {
+    ESP_LOGI(TAG, "write");
+
+    size_t len_key = 0;
+    bool found_key = false;
+    char *value = NULL;
+    for(size_t i = 0; i < len_data; i++) {
+        if(data[i] == ':') {
+            len_key = i;
+            if ((i + 1) < len_data)
+                value = (char *)&data[i+1];
+            found_key = true;
+        }
+    }
+
+    if (found_key) {
+        char *p;
+        uint32_t v = strtol(value, &p, 10);
+        esp_err_t ret = cfg_writeKey(data, len_key, v);
+        if (ret == ESP_OK)
+            ESP_LOGI(TAG, ">> %d << %.*s", v, len_key, data);
+    }
+}
+
+void cmd_dumpCfg(const char *topic, size_t len_topic, const char *data, size_t len_data) {
+    cfg_dump();
+}
 
 
 void cmd_coverSetPos(const char *topic, size_t len_topic, const char *data, size_t len_data) {
@@ -78,53 +141,50 @@ void cmd_reset(const char *topic, size_t len_topic, const char *data, size_t len
     esp_restart();
 }
 
-#define MQTT_TOPIC_ANNOUNCE  "cover/announce"
-#define MQTT_TOPIC_STATUS    "cover/status"
-#define MQTT_TOPIC_SET_POS   "cover/set_position"
-#define MQTT_TOPIC_POS       "cover/pos"
-#define MQTT_TOPIC_SET       "cover/set"
-#define MQTT_TOPIC_AVAILABLE "cover/available"
-#define MQTT_TOPIC_MEAS      "measure"
-#define MQTT_TOPIC_RESET     "reset"
-
-#define MQTT_TOPIC_READ_CFG  "cfg/read"
-#define MQTT_TOPIC_WRITE_CFG "cfg/write"
-#define MQTT_TOPIC_DUMP_CFG "cfg/dump"
-
 static CmdMQTT callback_table[] = {
     { MQTT_TOPIC_SET       , cmd_coverSet    } ,
     { MQTT_TOPIC_SET_POS   , cmd_coverSetPos } ,
     { MQTT_TOPIC_RESET     , cmd_reset       } ,
     { MQTT_TOPIC_READ_CFG  , cmd_readCfg     } ,
     { MQTT_TOPIC_WRITE_CFG , cmd_writeCfg    } ,
-    { MQTT_TOPIC_DUMP_CFG  , cmd_dumpCfg      } ,
+    { MQTT_TOPIC_DUMP_CFG  , cmd_dumpCfg     } ,
     { NULL                 , NULL            } ,
 };
 
 static bool announce = true;
-static char json_str[250];
 static void device_status(void * pvParameter)
 {
     while (1) {
+        int ret = 0;
+        //if (data_ready) {
+        //    mqtt_mgr_pub(MQTT_TOPIC_READ_CFG, sizeof(MQTT_TOPIC_READ_CFG), \
+        //            json_str, json_str_len);
+        //    data_ready = false;
+        //}
+
         if(announce) {
             mqtt_mgr_pub(MQTT_TOPIC_ANNOUNCE, sizeof(MQTT_TOPIC_ANNOUNCE), "announce", sizeof("announce") -1);
             mqtt_mgr_pub(MQTT_TOPIC_AVAILABLE, sizeof(MQTT_TOPIC_AVAILABLE), "online", sizeof("online") -1);
             announce = false;
         }
 
-        int ret = read_dht11(json_str, sizeof(json_str));
-        if (ret != ESP_FAIL)
-            mqtt_mgr_pub(MQTT_TOPIC_MEAS, sizeof(MQTT_TOPIC_MEAS), json_str, ret);
+        if (meas_ready) {
+            ret = read_dht11(json_str, sizeof(json_str));
+            if (ret != ESP_FAIL)
+                mqtt_mgr_pub(MQTT_TOPIC_MEAS, sizeof(MQTT_TOPIC_MEAS), json_str, ret);
 
-        ret = cover_status(json_str, sizeof(json_str));
-        if (ret != ESP_FAIL)
-            mqtt_mgr_pub(MQTT_TOPIC_STATUS, sizeof(MQTT_TOPIC_STATUS), json_str, ret);
+            ret = cover_status(json_str, sizeof(json_str));
+            if (ret != ESP_FAIL)
+                mqtt_mgr_pub(MQTT_TOPIC_STATUS, sizeof(MQTT_TOPIC_STATUS), json_str, ret);
+            meas_ready = false;
+        }
 
         ret = cover_position(json_str, sizeof(json_str));
         if (ret != ESP_FAIL)
             mqtt_mgr_pub(MQTT_TOPIC_POS, sizeof(MQTT_TOPIC_POS), json_str, ret);
 
-        DELAY_S(30);
+        DELAY_S(10);
+        meas_ready = !meas_ready;
     }
 }
 

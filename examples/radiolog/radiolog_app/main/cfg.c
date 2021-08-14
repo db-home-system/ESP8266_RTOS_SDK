@@ -32,23 +32,20 @@ struct RadioLogCfg {
 
 typedef struct CfgMap {
     char *key;
-    uint8_t len;
 } cfgmap_t;
 
 static const cfgmap_t map[] = {
-    { "cover_enable"        , 4 },
-    { "cover_open"          , 4 },
-    { "cover_close"         , 4 },
-    { "cover_up_time"       , 4 },
-    { "cover_down_time"     , 4 },
-    { "cover_polling_time"  , 4 },
-    { "cover_last_position" , 4 },
-    { NULL                   , 0 },
+    { "cover_enable"        },
+    { "cover_open"          },
+    { "cover_close"         },
+    { "cover_up_time"       },
+    { "cover_down_time"     },
+    { "cover_polling_time"  },
+    { "cover_last_position" },
+    { NULL                  },
 };
 
-#define NOVALUE 0xFFFFFFFF
-
-static esp_err_t cfg_dump(void) {
+esp_err_t cfg_dump(void) {
     ESP_LOGW(TAG, "dump");
     // Get key, go to read value in config partition
     const esp_partition_t *prt = esp_partition_find_first(ESP_PARTITION_TYPE_DATA,
@@ -77,10 +74,10 @@ static esp_err_t cfg_dump(void) {
 }
 
 
-static esp_err_t cfg_readKey(const char *key, size_t len_key, uint32_t *value) {
+esp_err_t cfg_readKey(const char *key, size_t len_key, uint32_t *value) {
     ESP_LOGW(TAG, "Read: %.*s", len_key, key);
-    *value = NOVALUE;
-    for (size_t i = 0; map[i].key && map[i].len; i++) {
+    *value = CFG_NOVALUE;
+    for (size_t i = 0; map[i].key; i++) {
         if (!strncmp(key, map[i].key, len_key)) {
             ESP_LOGI(TAG, "key: %s", map[i].key);
 
@@ -106,9 +103,9 @@ static esp_err_t cfg_readKey(const char *key, size_t len_key, uint32_t *value) {
 }
 
 
-static esp_err_t cfg_writeKey(const char *key, size_t len_key, uint32_t value) {
+esp_err_t cfg_writeKey(const char *key, size_t len_key, uint32_t value) {
     ESP_LOGW(TAG, "Write: %.*s [%d]", len_key, key, value);
-    for (size_t i = 0; map[i].key && map[i].len; i++) {
+    for (size_t i = 0; map[i].key; i++) {
         if (!strncmp(key, map[i].key, len_key)) {
 
             // Get key, go to read value in config partition
@@ -151,44 +148,6 @@ static esp_err_t cfg_writeKey(const char *key, size_t len_key, uint32_t value) {
 
     }
     return ESP_FAIL;
-}
-
-void cmd_readCfg(const char *topic, size_t len_topic, const char *data, size_t len_data) {
-    ESP_LOGI(TAG, "read");
-
-    uint32_t raw_value;
-    esp_err_t ret = cfg_readKey(data, len_data, &raw_value);
-    if (ret == ESP_OK)
-        ESP_LOGI(TAG, ">> %d << %.*s", raw_value, len_data, data);
-
-}
-
-void cmd_writeCfg(const char *topic, size_t len_topic, const char *data, size_t len_data) {
-    ESP_LOGI(TAG, "write");
-
-    size_t len_key = 0;
-    bool found_key = false;
-    char *value = NULL;
-    for(size_t i = 0; i < len_data; i++) {
-        if(data[i] == ':') {
-            len_key = i;
-            if ((i + 1) < len_data)
-                value = (char *)&data[i+1];
-            found_key = true;
-        }
-    }
-
-    if (found_key) {
-        char *p;
-        uint32_t v = strtol(value, &p, 10);
-        esp_err_t ret = cfg_writeKey(data, len_key, v);
-        if (ret == ESP_OK)
-            ESP_LOGI(TAG, ">> %d << %.*s", v, len_key, data);
-    }
-}
-
-void cmd_dumpCfg(const char *topic, size_t len_topic, const char *data, size_t len_data) {
-    cfg_dump();
 }
 
 void cmd_initCfg(void) {
