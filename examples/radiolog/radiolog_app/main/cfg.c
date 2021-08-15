@@ -35,7 +35,7 @@ typedef struct CfgMap {
 } cfgmap_t;
 
 static const cfgmap_t map[] = {
-    { "cover_enable"        },
+    { "node_mode"           },
     { "cover_open"          },
     { "cover_close"         },
     { "cover_up_time"       },

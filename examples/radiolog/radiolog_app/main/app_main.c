@@ -58,7 +58,6 @@ static button_t btn_up, btn_down;
 static char json_str[250];
 static bool data_ready = false;
 static int json_str_len = 0;
-static bool meas_ready = false;
 
 void cmd_readCfg(const char *topic, size_t len_topic, const char *data, size_t len_data) {
     memset(json_str, 0, sizeof(json_str));
@@ -156,11 +155,6 @@ static void device_status(void * pvParameter)
 {
     while (1) {
         int ret = 0;
-        //if (data_ready) {
-        //    mqtt_mgr_pub(MQTT_TOPIC_READ_CFG, sizeof(MQTT_TOPIC_READ_CFG), \
-        //            json_str, json_str_len);
-        //    data_ready = false;
-        //}
 
         if(announce) {
             mqtt_mgr_pub(MQTT_TOPIC_ANNOUNCE, sizeof(MQTT_TOPIC_ANNOUNCE), "announce", sizeof("announce") -1);
@@ -168,23 +162,19 @@ static void device_status(void * pvParameter)
             announce = false;
         }
 
-        if (meas_ready) {
-            ret = read_dht11(json_str, sizeof(json_str));
-            if (ret != ESP_FAIL)
-                mqtt_mgr_pub(MQTT_TOPIC_MEAS, sizeof(MQTT_TOPIC_MEAS), json_str, ret);
+        ret = read_dht11(json_str, sizeof(json_str));
+        if (ret != ESP_FAIL)
+            mqtt_mgr_pub(MQTT_TOPIC_MEAS, sizeof(MQTT_TOPIC_MEAS), json_str, ret);
 
-            ret = cover_status(json_str, sizeof(json_str));
-            if (ret != ESP_FAIL)
-                mqtt_mgr_pub(MQTT_TOPIC_STATUS, sizeof(MQTT_TOPIC_STATUS), json_str, ret);
-            meas_ready = false;
-        }
+        ret = cover_status(json_str, sizeof(json_str));
+        if (ret != ESP_FAIL)
+            mqtt_mgr_pub(MQTT_TOPIC_STATUS, sizeof(MQTT_TOPIC_STATUS), json_str, ret);
 
         ret = cover_position(json_str, sizeof(json_str));
         if (ret != ESP_FAIL)
             mqtt_mgr_pub(MQTT_TOPIC_POS, sizeof(MQTT_TOPIC_POS), json_str, ret);
 
-        DELAY_S(10);
-        meas_ready = !meas_ready;
+        DELAY_S(30);
     }
 }
 
@@ -196,19 +186,6 @@ static void event_cover_stop(uint8_t status, uint16_t position) {
     ret = cover_position(json_str, sizeof(json_str));
     if (ret != ESP_FAIL)
         mqtt_mgr_pub(MQTT_TOPIC_POS, sizeof(MQTT_TOPIC_POS), json_str, ret);
-}
-
-static uint16_t cover_running = 0;
-static void event_cover_run(uint8_t status, uint16_t position) {
-    if (cover_running == 10) {
-        memset(json_str, 0, sizeof(json_str));
-        int ret = sprintf(json_str,
-            "{\"position\":\"%d\", \"status\":\"%d\"}",
-            position, status);
-        mqtt_mgr_pub(MQTT_TOPIC_POS, sizeof(MQTT_TOPIC_POS), json_str, ret);
-        cover_running = 0;
-    }
-    cover_running++;
 }
 
 static const char *states[] = {
@@ -271,9 +248,16 @@ void app_main(void)
     btn_down.callback = on_button;
 
     mqtt_mgr_init(callback_table);
-    cover_init(&cover_ctx, event_cover_stop, event_cover_run);
+    cover_init(&cover_ctx, event_cover_stop);
     ESP_ERROR_CHECK(button_init(&btn_down));
     ESP_ERROR_CHECK(button_init(&btn_up));
+
+    //uint32_t cfg_mode;
+    //esp_err_t ret = cfg_readKey("node_mode", sizeof("node_mode"), &cfg_mode);
+    //if (cfg_mode == CFG_COVER) {
+    //}
+    //if (cfg_mode == CFG_SWITCH)
+    //    switch_init();
 
     xTaskCreate(&device_status, "device_status_task", 8192, NULL, 5, NULL);
 }
