@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include "cover.h"
+#include "cfg.h"
 #include "common.h"
 #include "macros.h"
 #include "esp_log.h"
@@ -28,25 +29,30 @@
 #define TRIAC_OFF() (gpio_set_level(TRIAC_ENABLE, 1))
 
 
-#define COVER_POLLING_TIME 250
 #define COVER_OPEN  0
 #define COVER_CLOSE 1
 #define COVER_STOP  2
+#define COVER_POLLING_TIME 250
 #define COVER_TRAVEL_TIME_UP 25
 #define COVER_TRAVEL_TIME_DOWN 24
 
-#define POS_TO_TICKS(p, tt) ((((tt) * 1000) / COVER_POLLING_TIME)  * (p) / 100)
+#define POS_TO_TICKS(p, tt, pollingtime) ((((tt) * 1000) / (pollingtime))  * (p) / 100)
 
 static const char *TAG = "cover";
 
 static cover_ctx_t *local_ctx;
+static uint32_t cfg_cover_open = COVER_OPEN;
+static uint32_t cfg_cover_close = COVER_CLOSE;
+static uint32_t cfg_cover_up_time = COVER_TRAVEL_TIME_UP;
+static uint32_t cfg_cover_down_time = COVER_TRAVEL_TIME_DOWN;
+static uint32_t cfg_cover_polling_time = COVER_POLLING_TIME;
 
 static uint16_t ticks_to_pos(cover_ctx_t *ctx) {
     int32_t p = 0;
-    if(ctx->direction == COVER_OPEN)
-        p = ctx->curr_pos + ((COVER_POLLING_TIME * ctx->on_ticks) / (COVER_TRAVEL_TIME_UP * 10));
+    if(ctx->direction == cfg_cover_open)
+        p = ctx->curr_pos + ((cfg_cover_polling_time * ctx->on_ticks) / (cfg_cover_up_time * 10));
     else
-        p = ctx->curr_pos - ((COVER_POLLING_TIME * ctx->on_ticks) / (COVER_TRAVEL_TIME_DOWN * 10));
+        p = ctx->curr_pos - ((cfg_cover_polling_time * ctx->on_ticks) / (cfg_cover_down_time * 10));
 
     //ESP_LOGW(TAG, "t->pos [%d] [%d]", ctx->on_ticks, p);
     return (uint16_t)MINMAX(0, p, 100);
@@ -64,23 +70,28 @@ static void motor_off(void) {
         local_ctx->callback_end(local_ctx->status, local_ctx->curr_pos);
     }
     ESP_LOGW(TAG, "Motor off");
+
+    uint32_t saved_pos = 0;
+    esp_err_t ret = cfg_readKey("cover_last_position", sizeof("cover_last_position"), &saved_pos);
+    if (ret == ESP_OK)
+        if (local_ctx->curr_pos != saved_pos) {
+            ret = cfg_writeKey("cover_last_position", sizeof("cover_last_position"), local_ctx->curr_pos);
+            if (ret != ESP_OK)
+                ESP_LOGE(TAG, "Unable to save pos");
+        }
+
     vTaskSuspend(local_ctx->run_handler);
 }
 
 static void cover_run_handler(void * pvParameter)
 {
     while (1) {
-        DELAY_MS(COVER_POLLING_TIME);
+        DELAY_MS(cfg_cover_polling_time);
         ESP_LOGI(TAG, "tick..");
         local_ctx->on_ticks++;
 
         if(local_ctx->on_ticks >= local_ctx->ticks_th_stop)
             motor_off();
-
-        // Call notify callback
-        if(local_ctx->callback_run) {
-            local_ctx->callback_run(local_ctx->status, ticks_to_pos(local_ctx));
-        }
     }
 }
 
@@ -94,20 +105,20 @@ void cover_run(int position) {
     local_ctx->on_ticks = 0;
 
     // guess direction 0: close; 100: open;
-    local_ctx->direction = COVER_CLOSE;
-    local_ctx->status = COVER_CLOSE;
+    local_ctx->direction = cfg_cover_close;
+    local_ctx->status = cfg_cover_close;
     if(local_ctx->target_pos >= local_ctx->curr_pos) {
-        local_ctx->direction = COVER_OPEN;
-        local_ctx->status = COVER_OPEN;
+        local_ctx->direction = cfg_cover_open;
+        local_ctx->status = cfg_cover_open;
     }
 
     //go to desiderate position
     uint16_t delta_pos = ABS(local_ctx->target_pos - local_ctx->curr_pos);
-    if(local_ctx->direction == COVER_OPEN) {
-        local_ctx->ticks_th_stop = POS_TO_TICKS(delta_pos, COVER_TRAVEL_TIME_UP);
+    if(local_ctx->direction == cfg_cover_open) {
+        local_ctx->ticks_th_stop = POS_TO_TICKS(delta_pos, cfg_cover_up_time, cfg_cover_polling_time);
         TRIAC_SEL_DX();
     } else {
-        local_ctx->ticks_th_stop = POS_TO_TICKS(delta_pos, COVER_TRAVEL_TIME_DOWN);
+        local_ctx->ticks_th_stop = POS_TO_TICKS(delta_pos, cfg_cover_down_time, cfg_cover_polling_time);
         TRIAC_SEL_SX();
     }
 
@@ -139,7 +150,7 @@ int cover_status(char *st_str, size_t len) {
 
     memset(st_str, 0, len);
 
-    if (local_ctx->status == COVER_CLOSE) {
+    if (local_ctx->status == cfg_cover_close) {
         strcpy(st_str, "close");
         return sizeof("close") -1;
     }
@@ -152,13 +163,12 @@ int cover_status(char *st_str, size_t len) {
     return sizeof("open") -1;
 }
 
-void cover_init(cover_ctx_t *ctx, cover_event_t callback_end, cover_event_t callback_run) {
+void cover_init(cover_ctx_t *ctx, cover_event_t callback_end) {
     assert(ctx);
     local_ctx = ctx;
     memset(local_ctx, 0, sizeof(cover_ctx_t));
 
     local_ctx->callback_end = callback_end;
-    local_ctx->callback_run = callback_run;
 
     gpio_config_t io_conf;
 
@@ -173,6 +183,34 @@ void cover_init(cover_ctx_t *ctx, cover_event_t callback_end, cover_event_t call
 
     TRIAC_OFF();
     TRIAC_SEL_DX();
+
+    esp_err_t ret = 0;
+
+    ret = cfg_readKey("cover_open", sizeof("cover_open"), &cfg_cover_open);
+    if (ret != ESP_OK)
+        cfg_cover_open = COVER_OPEN;
+
+    ret = cfg_readKey("cover_close", sizeof("cover_close"), &cfg_cover_close);
+    if (ret != ESP_OK)
+        cfg_cover_close = COVER_CLOSE;
+
+    ret = cfg_readKey("conver_up_time", sizeof("conver_up_time"), &cfg_cover_up_time);
+    if (ret != ESP_OK)
+        cfg_cover_up_time = COVER_TRAVEL_TIME_UP;
+
+    ret = cfg_readKey("conver_down_time", sizeof("conver_down_time"), &cfg_cover_down_time);
+    if (ret != ESP_OK)
+        cfg_cover_down_time = COVER_TRAVEL_TIME_DOWN;
+
+    ret = cfg_readKey("conver_polling_time", sizeof("conver_polling_time"), &cfg_cover_polling_time);
+    if (ret != ESP_OK)
+        cfg_cover_polling_time = COVER_POLLING_TIME;
+
+    uint32_t cfg_cover_last_position = 0;
+    ret = cfg_readKey("conver_last_position", sizeof("conver_last_position"), &cfg_cover_last_position);
+    local_ctx->curr_pos = cfg_cover_last_position;
+    if (ret != ESP_OK)
+        local_ctx->curr_pos = 0;
 
     // Create task to manage cover traveing time
     xTaskCreate(&cover_run_handler, "cover_run_handler", 8192, NULL, 5, &local_ctx->run_handler);
