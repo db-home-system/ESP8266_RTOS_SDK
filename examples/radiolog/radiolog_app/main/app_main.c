@@ -34,18 +34,20 @@
 
 #include "esp_log.h"
 
-#define MQTT_TOPIC_ANNOUNCE  "cover/announce"
-#define MQTT_TOPIC_STATUS    "cover/status"
-#define MQTT_TOPIC_SET_POS   "cover/set_position"
-#define MQTT_TOPIC_POS       "cover/pos"
-#define MQTT_TOPIC_SET       "cover/set"
-#define MQTT_TOPIC_AVAILABLE "cover/available"
-#define MQTT_TOPIC_MEAS      "measure"
-#define MQTT_TOPIC_RESET     "reset"
+#define COVER_TOPIC_STATUS    "cover/status"
+#define COVER_TOPIC_SET_POS   "cover/set_position"
+#define COVER_TOPIC_POS       "cover/pos"
+#define COVER_TOPIC_SET       "cover/set"
+#define COVER_TOPIC_AVAILABLE "cover/available"
 
-#define MQTT_TOPIC_READ_CFG  "cfg/read"
-#define MQTT_TOPIC_WRITE_CFG "cfg/write"
-#define MQTT_TOPIC_DUMP_CFG  "cfg/dump"
+#define CFG_TOPIC_READ  "cfg/read"
+#define CFG_TOPIC_WRITE "cfg/write"
+#define CFG_TOPIC_DUMP  "cfg/dump"
+
+#define APP_TOPIC_ANNOUNCE  "announce"
+#define APP_TOPIC_STATUS    "status"
+#define APP_TOPIC_MEAS      "measure"
+#define APP_TOPIC_RESET     "reset"
 
 
 #define BUTTON_UP    0  // D3
@@ -53,26 +55,43 @@
 
 static const char *TAG = "Radiolog";
 
+//{"position":"9999", "ticks":"999"}
+
+#define MAX_JSON_STR_LEN 80
+#define MAX_TOPIC_LEN 50
+
+typedef struct MqttMsg
+{
+    int json_str_len;
+    char json_str[MAX_JSON_STR_LEN];
+    int topic_len;
+    char topic[MAX_TOPIC_LEN];
+} mqttmsg_t;
+
+QueueHandle_t mqtt_msg_queue;
+
 static cover_ctx_t cover_ctx;
 static button_t btn_up, btn_down;
-static char json_str[250];
-static bool data_ready = false;
-static int json_str_len = 0;
+
+
 
 void cmd_readCfg(const char *topic, size_t len_topic, const char *data, size_t len_data) {
-    memset(json_str, 0, sizeof(json_str));
+    mqttmsg_t jmsg;
+    memset((void *)&jmsg, 0, sizeof(jmsg));
 
     uint32_t raw_value = CFG_NOVALUE;
     esp_err_t ret = cfg_readKey(data, len_data, &raw_value);
     if (ret == ESP_OK) {
-        json_str_len = sprintf(json_str,
-            "{\"%.*s\":\"%d\"}",
-            len_data, data, raw_value);
-    }
+        jmsg.json_str_len = sprintf(jmsg.json_str,
+                "{\"%.*s\":\"%d\"}",
+                len_data, data, raw_value);
 
-    if (json_str_len != ESP_FAIL) {
-        ESP_LOGI(TAG, "read: %.*s", json_str_len, json_str);
-        data_ready = true;
+        if (jmsg.json_str_len != ESP_FAIL) {
+            strcpy(jmsg.topic, APP_TOPIC_STATUS);
+            jmsg.topic_len = sizeof(APP_TOPIC_STATUS);
+            if (xQueueSend(mqtt_msg_queue, (void *)&jmsg, (TickType_t)0) != pdPASS)
+                ESP_LOGE(TAG, "Error while send cfg to queue");
+        }
     }
 }
 
@@ -141,51 +160,82 @@ void cmd_reset(const char *topic, size_t len_topic, const char *data, size_t len
 }
 
 static CmdMQTT callback_table[] = {
-    { MQTT_TOPIC_SET       , cmd_coverSet    } ,
-    { MQTT_TOPIC_SET_POS   , cmd_coverSetPos } ,
-    { MQTT_TOPIC_RESET     , cmd_reset       } ,
-    { MQTT_TOPIC_READ_CFG  , cmd_readCfg     } ,
-    { MQTT_TOPIC_WRITE_CFG , cmd_writeCfg    } ,
-    { MQTT_TOPIC_DUMP_CFG  , cmd_dumpCfg     } ,
+    { COVER_TOPIC_SET       , cmd_coverSet    } ,
+    { COVER_TOPIC_SET_POS   , cmd_coverSetPos } ,
+    { APP_TOPIC_RESET     , cmd_reset       } ,
+    { CFG_TOPIC_READ  , cmd_readCfg     } ,
+    { CFG_TOPIC_WRITE , cmd_writeCfg    } ,
+    { CFG_TOPIC_DUMP  , cmd_dumpCfg     } ,
     { NULL                 , NULL            } ,
 };
 
+
 static bool announce = true;
-static void device_status(void * pvParameter)
+static void publish_msg(void * pvParameter)
 {
     while (1) {
-        int ret = 0;
+
+        mqttmsg_t buff;
+
+        if(!mqtt_msg_queue)
+            return;
 
         if(announce) {
-            mqtt_mgr_pub(MQTT_TOPIC_ANNOUNCE, sizeof(MQTT_TOPIC_ANNOUNCE), "announce", sizeof("announce") -1);
-            mqtt_mgr_pub(MQTT_TOPIC_AVAILABLE, sizeof(MQTT_TOPIC_AVAILABLE), "online", sizeof("online") -1);
+            mqtt_mgr_pub(APP_TOPIC_ANNOUNCE, sizeof(APP_TOPIC_ANNOUNCE), "announce", sizeof("announce") -1);
+            mqtt_mgr_pub(COVER_TOPIC_AVAILABLE, sizeof(COVER_TOPIC_AVAILABLE), "online", sizeof("online") -1);
             announce = false;
         }
 
-        ret = read_dht11(json_str, sizeof(json_str));
-        if (ret != ESP_FAIL)
-            mqtt_mgr_pub(MQTT_TOPIC_MEAS, sizeof(MQTT_TOPIC_MEAS), json_str, ret);
+        if(xQueueReceive(mqtt_msg_queue, &(buff), (TickType_t)0))
+        {
+            ESP_LOGI(TAG, "send: %.*s %.*s len %d %d", buff.json_str_len, buff.json_str, \
+                    buff.topic_len, buff.topic, \
+                    buff.json_str_len, buff.topic_len);
+            mqtt_mgr_pub(buff.topic, buff.topic_len, buff.json_str, buff.json_str_len);
 
-        ret = cover_status(json_str, sizeof(json_str));
-        if (ret != ESP_FAIL)
-            mqtt_mgr_pub(MQTT_TOPIC_STATUS, sizeof(MQTT_TOPIC_STATUS), json_str, ret);
+        }
+        DELAY_MS(500);
+    }
+}
 
-        ret = cover_position(json_str, sizeof(json_str));
-        if (ret != ESP_FAIL)
-            mqtt_mgr_pub(MQTT_TOPIC_POS, sizeof(MQTT_TOPIC_POS), json_str, ret);
+static void measure(void * pvParameter) {
+    while(1) {
+        mqttmsg_t jmsg;
+        memset((void *)&jmsg, 0, sizeof(jmsg));
+
+        jmsg.json_str_len = read_dht11(jmsg.json_str, MAX_JSON_STR_LEN);
+        if (jmsg.json_str_len != ESP_FAIL) {
+            strcpy(jmsg.topic, APP_TOPIC_MEAS);
+            jmsg.topic_len = sizeof(APP_TOPIC_MEAS);
+
+            if (xQueueSend(mqtt_msg_queue, (void *)&jmsg, (TickType_t)10) != pdPASS)
+                ESP_LOGE(TAG, "Error while send meas to queue");
+        }
 
         DELAY_S(30);
     }
 }
 
 static void event_cover_stop(uint8_t status, uint16_t position) {
-    int ret = cover_status(json_str, sizeof(json_str));
-    if (ret != ESP_FAIL)
-        mqtt_mgr_pub(MQTT_TOPIC_STATUS, sizeof(MQTT_TOPIC_STATUS), json_str, ret);
+    mqttmsg_t jmsg;
+    memset((void *)&jmsg, 0, sizeof(jmsg));
+    jmsg.json_str_len = cover_status(jmsg.json_str, MAX_JSON_STR_LEN);
+    if (jmsg.json_str_len != ESP_FAIL) {
+        strcpy(jmsg.topic, COVER_TOPIC_STATUS);
+        jmsg.topic_len = sizeof(COVER_TOPIC_STATUS);
 
-    ret = cover_position(json_str, sizeof(json_str));
-    if (ret != ESP_FAIL)
-        mqtt_mgr_pub(MQTT_TOPIC_POS, sizeof(MQTT_TOPIC_POS), json_str, ret);
+        if (xQueueSend(mqtt_msg_queue, (void *)&jmsg, (TickType_t)10) != pdPASS)
+            ESP_LOGE(TAG, "Error while send status to queue");
+    }
+
+    jmsg.json_str_len = cover_position(jmsg.json_str, MAX_JSON_STR_LEN);
+    if (jmsg.json_str_len != ESP_FAIL) {
+        strcpy(jmsg.topic, COVER_TOPIC_POS);
+        jmsg.topic_len = sizeof(COVER_TOPIC_POS);
+
+        if (xQueueSend(mqtt_msg_queue, (void *)&jmsg, (TickType_t)10) != pdPASS)
+            ESP_LOGE(TAG, "Error while send pos to queue");
+    }
 }
 
 static const char *states[] = {
@@ -247,6 +297,11 @@ void app_main(void)
     btn_down.autorepeat = false;
     btn_down.callback = on_button;
 
+    mqtt_msg_queue = xQueueCreate(3, sizeof(mqttmsg_t));
+    if(mqtt_msg_queue == 0)
+        ESP_LOGE(TAG, "Unable to alloc a queue");
+    assert(mqtt_msg_queue != 0);
+
     mqtt_mgr_init(callback_table);
     cover_init(&cover_ctx, event_cover_stop);
     ESP_ERROR_CHECK(button_init(&btn_down));
@@ -259,6 +314,7 @@ void app_main(void)
     //if (cfg_mode == CFG_SWITCH)
     //    switch_init();
 
-    xTaskCreate(&device_status, "device_status_task", 8192, NULL, 5, NULL);
+    xTaskCreate(&publish_msg, "device_status_task", 8192, NULL, 10, NULL);
+    xTaskCreate(&measure, "device_measure_task", 8192, NULL, 10, NULL);
 }
 

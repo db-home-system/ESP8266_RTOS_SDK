@@ -114,7 +114,13 @@ void mqtt_mgr_pub(char *topic, size_t len_topic, const char *data, size_t len_da
         return;
     }
 
-    sprintf(buff, "%s/%s", root_url, topic);
+    memset(buff, 0, sizeof(buff));
+    int ret = sprintf(buff, "%s/%s", root_url, topic);
+    if (ret == ESP_FAIL) {
+        ESP_LOGE(TAG, "Unable to pack payload");
+        return;
+    }
+
     int msg_id = esp_mqtt_client_publish(mqtt_client, buff, data, len_data, 0, 0);
     ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
 }
