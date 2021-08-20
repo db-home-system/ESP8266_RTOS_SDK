@@ -245,23 +245,28 @@ static const char *states[] = {
     [BUTTON_PRESSED_LONG] = "pressed long",
 };
 
-static void on_button(button_t *btn, button_state_t state)
+static void on_button_up(button_t *btn, button_state_t state)
 {
-    ESP_LOGI(TAG, "%s button %s", btn == &btn_up ? "up" : "down", states[state]);
-
+    ESP_LOGI(TAG, "UP button %s", states[state]);
     if (state == BUTTON_PRESSED || state == BUTTON_PRESSED_LONG) {
-        if (btn == &btn_up) {
-            cover_run(100);
-            return;
-        }
-
-        if (btn == &btn_down) {
-            cover_run(0);
-            return;
-        }
+        cover_run(100);
     }
 
-    cover_stop();
+    if (state == BUTTON_RELEASED) {
+        cover_stop();
+    }
+}
+
+static void on_button_down(button_t *btn, button_state_t state)
+{
+    ESP_LOGI(TAG, "DOWN button %s", states[state]);
+    if (state == BUTTON_PRESSED || state == BUTTON_PRESSED_LONG) {
+        cover_run(0);
+    }
+
+    if (state == BUTTON_RELEASED) {
+        cover_stop();
+    }
 }
 
 void app_main(void)
@@ -287,15 +292,15 @@ void app_main(void)
 
     btn_up.gpio = BUTTON_UP;
     btn_up.pressed_level = 0;
-    btn_up.internal_pull = true;
+    btn_up.internal_pull = false;
     btn_up.autorepeat = false;
-    btn_up.callback = on_button;
+    btn_up.callback = on_button_up;
 
     btn_down.gpio = BUTTON_DOWN;
     btn_down.pressed_level = 0;
-    btn_down.internal_pull = true;
+    btn_down.internal_pull = false;
     btn_down.autorepeat = false;
-    btn_down.callback = on_button;
+    btn_down.callback = on_button_down;
 
     mqtt_msg_queue = xQueueCreate(3, sizeof(mqttmsg_t));
     if(mqtt_msg_queue == 0)

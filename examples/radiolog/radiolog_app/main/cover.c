@@ -63,7 +63,6 @@ static void motor_off(void) {
     TRIAC_OFF();
     local_ctx->status = COVER_STOP;
     local_ctx->curr_pos = ticks_to_pos(local_ctx);
-    // TODO: Save current pos
 
     // Call notify callback
     if(local_ctx->callback_end) {
@@ -72,11 +71,10 @@ static void motor_off(void) {
     ESP_LOGW(TAG, "Motor off");
 
     uint32_t saved_pos = 0;
-    esp_err_t ret = cfg_readKey("cover_last_position", sizeof("cover_last_position"), &saved_pos);
-    if (ret == ESP_OK)
+    if (cfg_readKey("cover_last_position", sizeof("cover_last_position"), &saved_pos) == ESP_OK)
         if (local_ctx->curr_pos != saved_pos) {
-            ret = cfg_writeKey("cover_last_position", sizeof("cover_last_position"), local_ctx->curr_pos);
-            if (ret != ESP_OK)
+            if (cfg_writeKey("cover_last_position", sizeof("cover_last_position"), \
+                        local_ctx->curr_pos) != ESP_OK)
                 ESP_LOGE(TAG, "Unable to save pos");
         }
 
@@ -86,12 +84,13 @@ static void motor_off(void) {
 static void cover_run_handler(void * pvParameter)
 {
     while (1) {
-        DELAY_MS(cfg_cover_polling_time);
         ESP_LOGI(TAG, "tick..");
         local_ctx->on_ticks++;
 
         if(local_ctx->on_ticks >= local_ctx->ticks_th_stop)
             motor_off();
+
+        DELAY_MS(cfg_cover_polling_time);
     }
 }
 
