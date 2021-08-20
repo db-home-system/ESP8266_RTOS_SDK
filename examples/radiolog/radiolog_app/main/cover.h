@@ -13,9 +13,9 @@ typedef void (*cover_event_t)(uint8_t status, uint16_t position);
 
 typedef struct CoverCtx {
     uint8_t status;
-    uint16_t curr_pos;
-    uint16_t target_pos;
-    uint16_t direction;
+    uint8_t direction;
+    uint32_t curr_pos;
+    uint32_t target_pos;
     uint32_t on_ticks;
     uint32_t ticks_th_stop;
     TaskHandle_t run_handler;

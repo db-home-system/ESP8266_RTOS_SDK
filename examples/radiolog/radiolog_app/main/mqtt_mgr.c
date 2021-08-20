@@ -87,7 +87,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
             break;
 
         case MQTT_EVENT_DATA:
-            ESP_LOGW(TAG, "MQTT_EVENT_DATA");
+            //ESP_LOGW(TAG, "MQTT_EVENT_DATA");
             ESP_LOGW(TAG, "TOPIC=%.*s", event->topic_len, event->topic);
             ESP_LOGW(TAG, "DATA=%.*s", event->data_len, event->data);
             mqtt_sub_callback_t handler = mqtt_mgr_searchFoo(event->topic, event->topic_len);
@@ -98,7 +98,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
             break;
 
         default:
-            ESP_LOGI(TAG, "MQTT_EVENT id:%d, msg_id=%d", event->event_id, event->msg_id);
+            //ESP_LOGI(TAG, "MQTT_EVENT id:%d, msg_id=%d", event->event_id, event->msg_id);
             break;
     }
 }

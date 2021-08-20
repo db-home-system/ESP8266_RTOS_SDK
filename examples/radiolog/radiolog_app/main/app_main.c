@@ -160,13 +160,13 @@ void cmd_reset(const char *topic, size_t len_topic, const char *data, size_t len
 }
 
 static CmdMQTT callback_table[] = {
-    { COVER_TOPIC_SET       , cmd_coverSet    } ,
-    { COVER_TOPIC_SET_POS   , cmd_coverSetPos } ,
+    { COVER_TOPIC_SET     , cmd_coverSet    } ,
+    { COVER_TOPIC_SET_POS , cmd_coverSetPos } ,
     { APP_TOPIC_RESET     , cmd_reset       } ,
-    { CFG_TOPIC_READ  , cmd_readCfg     } ,
-    { CFG_TOPIC_WRITE , cmd_writeCfg    } ,
-    { CFG_TOPIC_DUMP  , cmd_dumpCfg     } ,
-    { NULL                 , NULL            } ,
+    { CFG_TOPIC_READ      , cmd_readCfg     } ,
+    { CFG_TOPIC_WRITE     , cmd_writeCfg    } ,
+    { CFG_TOPIC_DUMP      , cmd_dumpCfg     } ,
+    { NULL                , NULL            } ,
 };
 
 

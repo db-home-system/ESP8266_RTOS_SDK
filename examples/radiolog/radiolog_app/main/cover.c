@@ -113,7 +113,7 @@ void cover_run(int position) {
     }
 
     //go to desiderate position
-    uint16_t delta_pos = ABS(local_ctx->target_pos - local_ctx->curr_pos);
+    uint32_t delta_pos = ABS((int32_t)(local_ctx->target_pos - local_ctx->curr_pos));
     if(local_ctx->direction == cfg_cover_open) {
         local_ctx->ticks_th_stop = POS_TO_TICKS(delta_pos, cfg_cover_up_time, cfg_cover_polling_time);
         TRIAC_SEL_DX();
@@ -163,6 +163,17 @@ int cover_status(char *st_str, size_t len) {
     return sizeof("open") -1;
 }
 
+
+#define COVER_CFG_INIT(key, value, default_value) \
+    do { \
+        if (cfg_readKey((key), sizeof((key)), &(value)) != ESP_OK) { \
+            ESP_LOGW(TAG, "Use default "key": %d", (value)); \
+            (value) = (default_value); \
+        } else { \
+            ESP_LOGI(TAG, "Get "key": %d", (value)); \
+        } \
+    } while(0)
+
 void cover_init(cover_ctx_t *ctx, cover_event_t callback_end) {
     assert(ctx);
     local_ctx = ctx;
@@ -184,33 +195,13 @@ void cover_init(cover_ctx_t *ctx, cover_event_t callback_end) {
     TRIAC_OFF();
     TRIAC_SEL_DX();
 
-    esp_err_t ret = 0;
 
-    ret = cfg_readKey("cover_open", sizeof("cover_open"), &cfg_cover_open);
-    if (ret != ESP_OK)
-        cfg_cover_open = COVER_OPEN;
-
-    ret = cfg_readKey("cover_close", sizeof("cover_close"), &cfg_cover_close);
-    if (ret != ESP_OK)
-        cfg_cover_close = COVER_CLOSE;
-
-    ret = cfg_readKey("conver_up_time", sizeof("conver_up_time"), &cfg_cover_up_time);
-    if (ret != ESP_OK)
-        cfg_cover_up_time = COVER_TRAVEL_TIME_UP;
-
-    ret = cfg_readKey("conver_down_time", sizeof("conver_down_time"), &cfg_cover_down_time);
-    if (ret != ESP_OK)
-        cfg_cover_down_time = COVER_TRAVEL_TIME_DOWN;
-
-    ret = cfg_readKey("conver_polling_time", sizeof("conver_polling_time"), &cfg_cover_polling_time);
-    if (ret != ESP_OK)
-        cfg_cover_polling_time = COVER_POLLING_TIME;
-
-    uint32_t cfg_cover_last_position = 0;
-    ret = cfg_readKey("conver_last_position", sizeof("conver_last_position"), &cfg_cover_last_position);
-    local_ctx->curr_pos = cfg_cover_last_position;
-    if (ret != ESP_OK)
-        local_ctx->curr_pos = 0;
+    COVER_CFG_INIT("cover_open", cfg_cover_open, COVER_OPEN);
+    COVER_CFG_INIT("cover_close", cfg_cover_close, COVER_CLOSE);
+    COVER_CFG_INIT("cover_up_time", cfg_cover_up_time, COVER_TRAVEL_TIME_UP);
+    COVER_CFG_INIT("cover_down_time", cfg_cover_down_time, COVER_TRAVEL_TIME_DOWN);
+    COVER_CFG_INIT("cover_polling_time", cfg_cover_polling_time, COVER_POLLING_TIME);
+    COVER_CFG_INIT("cover_last_position", local_ctx->curr_pos, 0);
 
     // Create task to manage cover traveing time
     xTaskCreate(&cover_run_handler, "cover_run_handler", 8192, NULL, 5, &local_ctx->run_handler);

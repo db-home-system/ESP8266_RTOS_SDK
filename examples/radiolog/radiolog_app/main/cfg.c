@@ -52,7 +52,7 @@ esp_err_t cfg_dump(void) {
             ESP_PARTITION_SUBTYPE_DATA_NVS, "config");
 
     if(prt) {
-        ESP_LOGI(TAG, "Get partition %d %s", prt->address, prt->label);
+        //ESP_LOGI(TAG, "Get partition %d %s", prt->address, prt->label);
         for (size_t i = 0; i < prt->size / SPI_FLASH_SEC_SIZE; i++) {
             uint32_t tmp[SPI_FLASH_SEC_SIZE/sizeof(uint32_t)];
 
@@ -75,7 +75,7 @@ esp_err_t cfg_dump(void) {
 
 
 esp_err_t cfg_readKey(const char *key, size_t len_key, uint32_t *value) {
-    ESP_LOGW(TAG, "Read: %.*s", len_key, key);
+    //ESP_LOGW(TAG, "Read: %.*s", len_key, key);
     *value = CFG_NOVALUE;
     for (size_t i = 0; map[i].key; i++) {
         if (!strncmp(key, map[i].key, len_key)) {
@@ -84,20 +84,17 @@ esp_err_t cfg_readKey(const char *key, size_t len_key, uint32_t *value) {
             // Get key, go to read value in config partition
             const esp_partition_t *prt = esp_partition_find_first(ESP_PARTITION_TYPE_DATA,
                     ESP_PARTITION_SUBTYPE_DATA_NVS, "config");
-
             if(prt) {
-                ESP_LOGI(TAG, "Get partition %d %s", prt->address, prt->label);
+                //ESP_LOGI(TAG, "Get partition %d %s", prt->address, prt->label);
                 size_t offset = i * sizeof(uint32_t);
                 esp_err_t ret = esp_partition_read(prt, offset, (uint8_t *)value, sizeof(uint32_t));
-                if (ret != ESP_OK) {
-                    ESP_LOGE(TAG, "Unable to read data [%d]", ret);
-                    return ESP_FAIL;
-                } else {
+                if (ret == ESP_OK)
                     return ESP_OK;
-                }
+
+                ESP_LOGE(TAG, "Unable to read data [%d]", ret);
+                return ret;
             }
         }
-
     }
     return ESP_FAIL;
 }
@@ -115,7 +112,7 @@ esp_err_t cfg_writeKey(const char *key, size_t len_key, uint32_t value) {
             if(prt) {
                 size_t offset = i * sizeof(uint32_t);
                 ESP_LOGI(TAG, "key: %s offset: %d size: %d", map[i].key, offset, sizeof(uint32_t));
-                ESP_LOGI(TAG, "Get partition %d %s %d", prt->address, prt->label, prt->size);
+                //ESP_LOGI(TAG, "Get partition %d %s %d", prt->address, prt->label, prt->size);
 
                 // read block page to chage, we like aligned to 32bit
                 uint32_t tmp[SPI_FLASH_SEC_SIZE/sizeof(uint32_t)];
@@ -137,12 +134,11 @@ esp_err_t cfg_writeKey(const char *key, size_t len_key, uint32_t value) {
                 ESP_LOGI(TAG, "page %d off %d v %d", page, offset, value);
 
                 ret = esp_partition_write(prt, page, (char *)tmp, sizeof(tmp));
-                if (ret != ESP_OK) {
-                    ESP_LOGE(TAG, "Unable to write data block [%d]", ret);
-                    return ret;
-                } else {
+                if (ret == ESP_OK) {
                     return ESP_OK;
                 }
+                ESP_LOGE(TAG, "Unable to write data block [%d]", ret);
+                return ret;
             }
         }
 
