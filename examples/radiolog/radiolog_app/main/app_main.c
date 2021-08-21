@@ -223,12 +223,7 @@ static void measure(void * pvParameter) {
 static void cover_status_fill(const cover_ctx_t *ctx) {
     mqttmsg_t jmsg;
 
-    memset((void *)&jmsg, 0, sizeof(jmsg));
-    jmsg.json_str_len = sprintf(jmsg.json_str,
-            "{\"position\":\"%d\", \"ticks\":\"%d\"}",
-            ctx->curr_pos,
-            ctx->on_ticks);
-
+    jmsg.json_str_len = cover_position((char *)&jmsg.json_str, MAX_JSON_STR_LEN);
     if (jmsg.json_str_len != ESP_FAIL) {
         strcpy(jmsg.topic, COVER_TOPIC_POS);
         jmsg.topic_len = sizeof(COVER_TOPIC_POS);

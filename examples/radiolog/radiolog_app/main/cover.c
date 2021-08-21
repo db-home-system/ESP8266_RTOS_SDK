@@ -40,7 +40,6 @@
 
 static const char *TAG = "cover";
 
-static bool skip_tick_on_init = true;
 static cover_ctx_t *local_ctx;
 static uint32_t cfg_cover_open = COVER_OPEN;
 static uint32_t cfg_cover_close = COVER_CLOSE;
@@ -148,6 +147,22 @@ int cover_status(char *st_str, size_t len) {
 
     strcpy(st_str, "open");
     return sizeof("open") -1;
+}
+
+int cover_position(char *st_str, size_t len) {
+    assert(st_str);
+    assert(len > 0);
+
+    memset(st_str, 0, len);
+
+    int ret = sprintf(st_str,
+            "{\"position\":\"%d\", \"ticks\":\"%d\"}",
+            local_ctx->curr_pos,
+            local_ctx->on_ticks);
+    if (ret > 0)
+        return ret;
+
+    return ESP_FAIL;
 }
 
 
