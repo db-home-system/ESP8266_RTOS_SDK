@@ -34,11 +34,17 @@
 
 #include "esp_log.h"
 
-#define COVER_TOPIC_STATUS    "cover/status"
-#define COVER_TOPIC_SET_POS   "cover/set_position"
-#define COVER_TOPIC_POS       "cover/pos"
-#define COVER_TOPIC_SET       "cover/set"
+
+//state_topic:        "radiolog/Node_f4a98f/cover/status"
+//command_topic:      "radiolog/Node_f4a98f/cover/set"
+//position_topic:     "radiolog/Node_f4a98f/cover/position"
+//set_position_topic: "radiolog/Node_f4a98f/cover/set/position"
+
 #define COVER_TOPIC_AVAILABLE "cover/available"
+#define COVER_TOPIC_STATUS    "cover/status"
+#define COVER_TOPIC_POS       "cover/position"
+#define COVER_TOPIC_SET_POS   "cover/set/position"
+#define COVER_TOPIC_SET       "cover/set"
 
 #define CFG_TOPIC_READ  "cfg/read"
 #define CFG_TOPIC_WRITE "cfg/write"
@@ -174,18 +180,16 @@ static bool announce = true;
 static void publish_msg(void * pvParameter)
 {
     while (1) {
-
-        mqttmsg_t buff;
-
-        if(!mqtt_msg_queue)
-            return;
-
         if(announce) {
             mqtt_mgr_pub(APP_TOPIC_ANNOUNCE, sizeof(APP_TOPIC_ANNOUNCE), "announce", sizeof("announce") -1);
             mqtt_mgr_pub(COVER_TOPIC_AVAILABLE, sizeof(COVER_TOPIC_AVAILABLE), "online", sizeof("online") -1);
             announce = false;
         }
 
+        if(!mqtt_msg_queue)
+            return;
+
+        mqttmsg_t buff;
         if(xQueueReceive(mqtt_msg_queue, &(buff), (TickType_t)0))
         {
             ESP_LOGI(TAG, "send: %.*s %.*s len %d %d", buff.json_str_len, buff.json_str, \
@@ -216,10 +220,24 @@ static void measure(void * pvParameter) {
     }
 }
 
-static void event_cover_stop(uint8_t status, uint16_t position) {
+static void cover_status_fill(const cover_ctx_t *ctx) {
     mqttmsg_t jmsg;
+
     memset((void *)&jmsg, 0, sizeof(jmsg));
-    jmsg.json_str_len = cover_status(jmsg.json_str, MAX_JSON_STR_LEN);
+    jmsg.json_str_len = sprintf(jmsg.json_str,
+            "{\"position\":\"%d\", \"ticks\":\"%d\"}",
+            ctx->curr_pos,
+            ctx->on_ticks);
+
+    if (jmsg.json_str_len != ESP_FAIL) {
+        strcpy(jmsg.topic, COVER_TOPIC_POS);
+        jmsg.topic_len = sizeof(COVER_TOPIC_POS);
+
+        if (xQueueSend(mqtt_msg_queue, (void *)&jmsg, (TickType_t)10) != pdPASS)
+            ESP_LOGE(TAG, "Error while pos to queue");
+    }
+
+    jmsg.json_str_len = cover_status((char *)&jmsg.json_str, MAX_JSON_STR_LEN);
     if (jmsg.json_str_len != ESP_FAIL) {
         strcpy(jmsg.topic, COVER_TOPIC_STATUS);
         jmsg.topic_len = sizeof(COVER_TOPIC_STATUS);
@@ -227,15 +245,18 @@ static void event_cover_stop(uint8_t status, uint16_t position) {
         if (xQueueSend(mqtt_msg_queue, (void *)&jmsg, (TickType_t)10) != pdPASS)
             ESP_LOGE(TAG, "Error while send status to queue");
     }
+}
 
-    jmsg.json_str_len = cover_position(jmsg.json_str, MAX_JSON_STR_LEN);
-    if (jmsg.json_str_len != ESP_FAIL) {
-        strcpy(jmsg.topic, COVER_TOPIC_POS);
-        jmsg.topic_len = sizeof(COVER_TOPIC_POS);
 
-        if (xQueueSend(mqtt_msg_queue, (void *)&jmsg, (TickType_t)10) != pdPASS)
-            ESP_LOGE(TAG, "Error while send pos to queue");
+static void cover_status_task(void * pvParameter) {
+    while(1) {
+        cover_status_fill(&cover_ctx);
+        DELAY_S(30);
     }
+}
+
+static void event_cover_stop(const cover_ctx_t *ctx) {
+    cover_status_fill(ctx);
 }
 
 static const char *states[] = {
@@ -319,7 +340,8 @@ void app_main(void)
     //if (cfg_mode == CFG_SWITCH)
     //    switch_init();
 
-    xTaskCreate(&publish_msg, "device_status_task", 8192, NULL, 10, NULL);
+    xTaskCreate(&publish_msg, "mqtt_pub_task", 8192, NULL, 10, NULL);
     xTaskCreate(&measure, "device_measure_task", 8192, NULL, 10, NULL);
+    xTaskCreate(&cover_status_task, "device_measure_task", 8192, NULL, 10, NULL);
 }
 
