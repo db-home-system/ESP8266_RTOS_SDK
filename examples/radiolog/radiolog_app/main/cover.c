@@ -25,8 +25,8 @@
 
 #define TRIAC_SEL_DX() (gpio_set_level(TRIAC_DIR, 1))
 #define TRIAC_SEL_SX() (gpio_set_level(TRIAC_DIR, 0))
-#define TRIAC_ON() (gpio_set_level(TRIAC_ENABLE, 0))
-#define TRIAC_OFF() (gpio_set_level(TRIAC_ENABLE, 1))
+#define TRIAC_ON() (gpio_set_level(TRIAC_ENABLE, 1))
+#define TRIAC_OFF() (gpio_set_level(TRIAC_ENABLE, 0))
 
 
 #define COVER_OPEN  0
@@ -40,6 +40,7 @@
 
 static const char *TAG = "cover";
 
+static bool skip_tick_on_init = true;
 static cover_ctx_t *local_ctx;
 static uint32_t cfg_cover_open = COVER_OPEN;
 static uint32_t cfg_cover_close = COVER_CLOSE;
@@ -66,7 +67,7 @@ static void motor_off(void) {
 
     // Call notify callback
     if(local_ctx->callback_end) {
-        local_ctx->callback_end(local_ctx->status, local_ctx->curr_pos);
+        local_ctx->callback_end((const cover_ctx_t *)local_ctx);
     }
     ESP_LOGW(TAG, "Motor off");
 
@@ -84,7 +85,6 @@ static void motor_off(void) {
 static void cover_run_handler(void * pvParameter)
 {
     while (1) {
-        ESP_LOGI(TAG, "tick..");
         local_ctx->on_ticks++;
 
         if(local_ctx->on_ticks >= local_ctx->ticks_th_stop)
@@ -115,10 +115,10 @@ void cover_run(int position) {
     uint32_t delta_pos = ABS((int32_t)(local_ctx->target_pos - local_ctx->curr_pos));
     if(local_ctx->direction == cfg_cover_open) {
         local_ctx->ticks_th_stop = POS_TO_TICKS(delta_pos, cfg_cover_up_time, cfg_cover_polling_time);
-        TRIAC_SEL_DX();
+        TRIAC_SEL_SX();
     } else {
         local_ctx->ticks_th_stop = POS_TO_TICKS(delta_pos, cfg_cover_down_time, cfg_cover_polling_time);
-        TRIAC_SEL_SX();
+        TRIAC_SEL_DX();
     }
 
     ESP_LOGI(TAG, "Run from pos[%d] for on[%u] to DIR[%d]",
@@ -132,23 +132,11 @@ void cover_stop(void) {
     motor_off();
 }
 
-int cover_position(char *st_str, size_t len) {
-    assert(st_str);
-    assert(len > 0);
-
-    memset(st_str, 0, len);
-    return sprintf(st_str,
-        "{\"position\":\"%d\", \"ticks\":\"%d\"}",
-        local_ctx->curr_pos,
-        local_ctx->on_ticks);
-}
-
 int cover_status(char *st_str, size_t len) {
     assert(st_str);
     assert(len > 0);
 
     memset(st_str, 0, len);
-
     if (local_ctx->status == cfg_cover_close) {
         strcpy(st_str, "close");
         return sizeof("close") -1;
