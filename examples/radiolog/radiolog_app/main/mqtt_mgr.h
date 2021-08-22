@@ -16,10 +16,22 @@ typedef struct CmdMQTT {
 } CmdMQTT;
 
 #define CMD_MAX_POOL_NO    3
+
 typedef struct CmdMQTTTable {
     uint8_t fill_index;
     CmdMQTT *pool[CMD_MAX_POOL_NO];
 } CmdMQTTTable;
+
+#define MAX_JSON_STR_LEN 80
+#define MAX_TOPIC_LEN 50
+
+typedef struct MqttMsg
+{
+    int json_str_len;
+    char json_str[MAX_JSON_STR_LEN];
+    int topic_len;
+    char topic[MAX_TOPIC_LEN];
+} mqttmsg_t;
 
 void mqtt_mgr_pub(char *topic, size_t len_topic, const char *data, size_t len_data);
 void mqtt_mgr_regiterTable(CmdMQTT *table);

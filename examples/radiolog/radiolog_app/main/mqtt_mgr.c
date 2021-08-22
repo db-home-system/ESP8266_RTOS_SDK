@@ -117,7 +117,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
 
 void mqtt_mgr_regiterTable(CmdMQTT *table) {
     assert(table);
-    assert(local_callbacks.fill_index+1 < CMD_MAX_POOL_NO);
+    assert(local_callbacks.fill_index < CMD_MAX_POOL_NO);
 
     local_callbacks.pool[local_callbacks.fill_index] = table;
     local_callbacks.fill_index++;

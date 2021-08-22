@@ -86,6 +86,9 @@ static void cover_run_handler(void * pvParameter)
 {
     while (1) {
         local_ctx->on_ticks++;
+        putchar('.');
+        if (!(local_ctx->on_ticks % 10))
+            putchar('\n');
 
         if(local_ctx->on_ticks >= local_ctx->ticks_th_stop)
             motor_off();

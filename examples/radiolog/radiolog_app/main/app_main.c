@@ -34,21 +34,10 @@
 
 #include "esp_log.h"
 
-
-//state_topic:        "radiolog/Node_f4a98f/cover/status"
-//command_topic:      "radiolog/Node_f4a98f/cover/set"
-//position_topic:     "radiolog/Node_f4a98f/cover/position"
-//set_position_topic: "radiolog/Node_f4a98f/cover/set/position"
-
-#define CFG_TOPIC_READ  "cfg/read"
-#define CFG_TOPIC_WRITE "cfg/write"
-#define CFG_TOPIC_DUMP  "cfg/dump"
-
 #define APP_TOPIC_ANNOUNCE  "announce"
 #define APP_TOPIC_STATUS    "status"
 #define APP_TOPIC_MEAS      "measure"
 #define APP_TOPIC_RESET     "reset"
-
 
 #define BUTTON_UP    0  // D3
 #define BUTTON_DOWN  4 // D6
@@ -57,71 +46,10 @@ static const char *TAG = "Radiolog";
 
 //{"position":"9999", "ticks":"999"}
 
-#define MAX_JSON_STR_LEN 80
-#define MAX_TOPIC_LEN 50
 
-typedef struct MqttMsg
-{
-    int json_str_len;
-    char json_str[MAX_JSON_STR_LEN];
-    int topic_len;
-    char topic[MAX_TOPIC_LEN];
-} mqttmsg_t;
-
-QueueHandle_t mqtt_msg_queue;
-
+static QueueHandle_t mqtt_msg_queue;
 static cover_ctx_t cover_ctx;
 static button_t btn_up, btn_down;
-
-
-
-void cmd_readCfg(const char *topic, size_t len_topic, const char *data, size_t len_data) {
-    mqttmsg_t jmsg;
-    memset((void *)&jmsg, 0, sizeof(jmsg));
-
-    uint32_t raw_value = CFG_NOVALUE;
-    esp_err_t ret = cfg_readKey(data, len_data, &raw_value);
-    if (ret == ESP_OK) {
-        jmsg.json_str_len = sprintf(jmsg.json_str,
-                "{\"%.*s\":\"%d\"}",
-                len_data, data, raw_value);
-
-        if (jmsg.json_str_len != ESP_FAIL) {
-            strcpy(jmsg.topic, APP_TOPIC_STATUS);
-            jmsg.topic_len = sizeof(APP_TOPIC_STATUS);
-            if (xQueueSend(mqtt_msg_queue, (void *)&jmsg, (TickType_t)0) != pdPASS)
-                ESP_LOGE(TAG, "Error while send cfg to queue");
-        }
-    }
-}
-
-void cmd_writeCfg(const char *topic, size_t len_topic, const char *data, size_t len_data) {
-    ESP_LOGI(TAG, "write");
-
-    size_t len_key = 0;
-    bool found_key = false;
-    char *value = NULL;
-    for(size_t i = 0; i < len_data; i++) {
-        if(data[i] == ':') {
-            len_key = i;
-            if ((i + 1) < len_data)
-                value = (char *)&data[i+1];
-            found_key = true;
-        }
-    }
-
-    if (found_key) {
-        char *p;
-        uint32_t v = strtol(value, &p, 10);
-        esp_err_t ret = cfg_writeKey(data, len_key, v);
-        if (ret == ESP_OK)
-            ESP_LOGI(TAG, ">> %d << %.*s", v, len_key, data);
-    }
-}
-
-void cmd_dumpCfg(const char *topic, size_t len_topic, const char *data, size_t len_data) {
-    cfg_dump();
-}
 
 
 void cmd_reset(const char *topic, size_t len_topic, const char *data, size_t len_data) {
@@ -130,9 +58,6 @@ void cmd_reset(const char *topic, size_t len_topic, const char *data, size_t len
 
 static CmdMQTT callback_table[] = {
     { APP_TOPIC_RESET     , cmd_reset       } ,
-    { CFG_TOPIC_READ      , cmd_readCfg     } ,
-    { CFG_TOPIC_WRITE     , cmd_writeCfg    } ,
-    { CFG_TOPIC_DUMP      , cmd_dumpCfg     } ,
     { NULL                , NULL            } ,
 };
 
@@ -284,6 +209,7 @@ void app_main(void)
     assert(mqtt_msg_queue != 0);
 
     mqtt_mgr_init(callback_table);
+    cmd_initCfg(&mqtt_msg_queue);
     cover_init(&cover_ctx, event_cover_stop);
     ESP_ERROR_CHECK(button_init(&btn_down));
     ESP_ERROR_CHECK(button_init(&btn_up));

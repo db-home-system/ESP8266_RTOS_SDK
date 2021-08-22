@@ -15,6 +15,12 @@
 #include "esp_partition.h"
 #include "common.h"
 #include "cfg.h"
+#include "mqtt_mgr.h"
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/semphr.h"
+#include "freertos/queue.h"
 
 #include "esp_log.h"
 
@@ -45,7 +51,8 @@ static const cfgmap_t map[] = {
     { NULL                  },
 };
 
-esp_err_t cfg_dump(void) {
+static QueueHandle_t *cfg_module_queue;
+static esp_err_t cfg_dump(void) {
     ESP_LOGW(TAG, "dump");
     // Get key, go to read value in config partition
     const esp_partition_t *prt = esp_partition_find_first(ESP_PARTITION_TYPE_DATA,
@@ -144,5 +151,64 @@ esp_err_t cfg_writeKey(const char *key, size_t len_key, uint32_t value) {
     return ESP_FAIL;
 }
 
-void cmd_initCfg(void) {
+static void cmd_readCfg(const char *topic, size_t len_topic, const char *data, size_t len_data) {
+    mqttmsg_t jmsg;
+    memset((void *)&jmsg, 0, sizeof(jmsg));
+
+    uint32_t raw_value = CFG_NOVALUE;
+    esp_err_t ret = cfg_readKey(data, len_data, &raw_value);
+    if (ret == ESP_OK) {
+        jmsg.json_str_len = sprintf(jmsg.json_str,
+                "{\"%.*s\":\"%d\"}",
+                len_data, data, raw_value);
+
+        if (jmsg.json_str_len != ESP_FAIL) {
+            strcpy(jmsg.topic, CFG_TOPIC_CFG);
+            jmsg.topic_len = sizeof(CFG_TOPIC_CFG);
+            if (xQueueSend(*cfg_module_queue, (void *)&jmsg, (TickType_t)0) != pdPASS)
+                ESP_LOGE(TAG, "Error while send cfg to queue");
+        }
+    }
+}
+
+static void cmd_writeCfg(const char *topic, size_t len_topic, const char *data, size_t len_data) {
+    ESP_LOGI(TAG, "write");
+
+    size_t len_key = 0;
+    bool found_key = false;
+    char *value = NULL;
+    for(size_t i = 0; i < len_data; i++) {
+        if(data[i] == ':') {
+            len_key = i;
+            if ((i + 1) < len_data)
+                value = (char *)&data[i+1];
+            found_key = true;
+        }
+    }
+
+    if (found_key) {
+        char *p;
+        uint32_t v = strtol(value, &p, 10);
+        esp_err_t ret = cfg_writeKey(data, len_key, v);
+        if (ret == ESP_OK)
+            ESP_LOGI(TAG, ">> %d << %.*s", v, len_key, data);
+    }
+}
+
+static void cmd_dumpCfg(const char *topic, size_t len_topic, const char *data, size_t len_data) {
+    cfg_dump();
+}
+
+static CmdMQTT callback_table[] = {
+    { CFG_TOPIC_READ      , cmd_readCfg     } ,
+    { CFG_TOPIC_WRITE     , cmd_writeCfg    } ,
+    { CFG_TOPIC_DUMP      , cmd_dumpCfg     } ,
+    { NULL                , NULL            } ,
+};
+
+void cmd_initCfg(QueueHandle_t *queue) {
+    cfg_module_queue = queue;
+
+    // Register on mqtt table cover callbacks
+    mqtt_mgr_regiterTable(callback_table);
 }
