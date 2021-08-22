@@ -61,17 +61,17 @@ cmd_table = {
    cmds[0] : ["radiolog/%s/reset" % NODEID, ""],
    cmds[1] : ["radiolog/%s/cover/set" % NODEID, "open"],
    cmds[2] : ["radiolog/%s/cover/set" % NODEID, "close"],
-   cmds[3] : ["radiolog/%s/cover/set_position" % NODEID, "ARGS"],
+   cmds[3] : ["radiolog/%s/cover/set/position" % NODEID, "ARGS"],
    cmds[4] : ["radiolog/%s/cfg/read" % NODEID, "ARGS"],
    cmds[5] : ["radiolog/%s/cfg/write" % NODEID, "ARGS"],
    cmds[6] : ["radiolog/%s/cfg/dump" % NODEID, ""],
 }
 
 cmd_table_cfg = [
-    ["radiolog/%s/cfg/write" % NODEID , "cover_open:0"] ,
+    ["radiolog/%s/cfg/write" % NODEID , "cover_open:1"] ,
     ["radiolog/%s/cfg/read" % NODEID  , "cover_open"] ,
 
-    ["radiolog/%s/cfg/write" % NODEID , "cover_close:1"] ,
+    ["radiolog/%s/cfg/write" % NODEID , "cover_close:0"] ,
     ["radiolog/%s/cfg/read" % NODEID  , "cover_close"] ,
 
     ["radiolog/%s/cfg/write" % NODEID , "cover_up_time:25"] ,
@@ -108,7 +108,7 @@ if key in cmd_table:
     payload = cmd[PAYLOAD]
     try:
         if payload == "ARGS":
-            payload = cmd_args 
+            payload = cmd_args
     except IndexError:
         print("Missing args")
         sys.exit(1)
