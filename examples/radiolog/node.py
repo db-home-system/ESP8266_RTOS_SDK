@@ -11,29 +11,60 @@ def on_connect(client, userdata, flags, rc):
     print("Connected with result code "+str(rc))
     client.subscribe("radiolog/#")
 
-def on_message(client, userdata, msg):
-    print(msg.topic, " ", str(msg.payload))
-
 client = mqtt.Client()
 client.username_pw_set("radiolog", "home24radiolog98")
 client.on_connect = on_connect
-client.on_message = on_message
 
 client.connect("fagotto.asterix.cloud", 1317, 60)
-client.loop_start()
-#NODEID = "Node_85d904"
-NODEID = "Node_f4a98f"
+
+
+cmds = [
+    "reset",
+    "open" ,
+    "close",
+    "go"   ,
+    "r"    ,
+    "w"    ,
+    "dump"
+]
+
+
+NODEIDs = [
+        "Node_85d904",
+        "Node_f4a98f",
+        "Node_513b66"
+        ]
 TOPIC=0
 PAYLOAD=1
 
+node_list = ["%s: idx=%s" % (n,i) for i,n in enumerate(NODEIDs)]
+
+if len(sys.argv) < 3:
+    print("usage %s nodeid <%s> cmd <%s>" % (sys.argv[0], list(node_list),
+        cmds))
+    sys.exit(0)
+
+try:
+    nodeid = sys.argv[1].strip()
+    key = sys.argv[2].strip()
+    cmd_args = sys.argv[3].strip()
+except IndexError:
+    pass
+
+try:
+    NODEID = NODEIDs[int(nodeid)]
+except IndexError:
+    print("wrong ids")
+    sys.exit(1)
+
 cmd_table = {
-    "reset" : ["radiolog/%s/reset" % NODEID, ""],
-    "open"  : ["radiolog/%s/cover/set" % NODEID, "open"],
-    "close" : ["radiolog/%s/cover/set" % NODEID, "close"],
-    "go"    : ["radiolog/%s/cover/set_position" % NODEID, "ARGS"],
-    "r"     : ["radiolog/%s/cfg/read" % NODEID, "ARGS"],
-    "w"     : ["radiolog/%s/cfg/write" % NODEID, "ARGS"],
-    "dump"  : ["radiolog/%s/cfg/dump" % NODEID, ""],
+   cmds[0] : ["radiolog/%s/reset" % NODEID, ""],
+   cmds[1] : ["radiolog/%s/cover/set" % NODEID, "open"],
+   cmds[2] : ["radiolog/%s/cover/set" % NODEID, "close"],
+   cmds[3] : ["radiolog/%s/cover/set_position" % NODEID, "ARGS"],
+   cmds[4] : ["radiolog/%s/cfg/read" % NODEID, "ARGS"],
+   cmds[5] : ["radiolog/%s/cfg/write" % NODEID, "ARGS"],
+   cmds[6] : ["radiolog/%s/cfg/dump" % NODEID, ""],
 }
 
 cmd_table_cfg = [
@@ -53,11 +84,17 @@ cmd_table_cfg = [
     ["radiolog/%s/cfg/read" % NODEID  , "cover_polling_time"] ,
 ]
 
-if len(sys.argv) < 2:
-    print("usage %s cmd <%s>" % (sys.argv[0], list(cmd_table.keys())))
-    sys.exit(0)
 
-key = sys.argv[1].strip()
+def on_message(client, userdata, msg):
+    if NODEID in msg.topic:
+        print(msg.topic, " ", str(msg.payload))
+
+
+if key == "log":
+    client.on_message = on_message
+    client.loop_forever()
+client.loop_start()
+
 if key == "cfg":
     for i in cmd_table_cfg:
         client.publish(i[TOPIC], i[PAYLOAD])
@@ -71,7 +108,7 @@ if key in cmd_table:
     payload = cmd[PAYLOAD]
     try:
         if payload == "ARGS":
-            payload = sys.argv[2]
+            payload = cmd_args 
     except IndexError:
         print("Missing args")
         sys.exit(1)
