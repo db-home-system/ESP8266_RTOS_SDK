@@ -9,6 +9,8 @@
 #include <stddef.h>
 #include <string.h>
 
+#include <button.h>
+
 #include "cover.h"
 #include "cfg.h"
 #include "common.h"
@@ -20,6 +22,8 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
+#include "freertos/queue.h"
 
 #define TRIAC_ENABLE    14
 #define TRIAC_DIR       16
@@ -29,6 +33,8 @@
 #define TRIAC_ON() (gpio_set_level(TRIAC_ENABLE, 1))
 #define TRIAC_OFF() (gpio_set_level(TRIAC_ENABLE, 0))
 
+#define BUTTON_UP    0  // D3
+#define BUTTON_DOWN  4  // D6
 
 #define COVER_OPEN  0
 #define COVER_CLOSE 1
@@ -41,12 +47,15 @@
 
 static const char *TAG = "cover";
 
-static cover_ctx_t *local_ctx;
 static uint32_t cfg_cover_open = COVER_OPEN;
 static uint32_t cfg_cover_close = COVER_CLOSE;
 static uint32_t cfg_cover_up_time = COVER_TRAVEL_TIME_UP;
 static uint32_t cfg_cover_down_time = COVER_TRAVEL_TIME_DOWN;
 static uint32_t cfg_cover_polling_time = COVER_POLLING_TIME;
+
+static button_t btn_up, btn_down;
+static QueueHandle_t *cover_module_queue;
+static cover_ctx_t *local_ctx;
 
 static uint16_t ticks_to_pos(cover_ctx_t *ctx) {
     int32_t p = 0;
@@ -169,6 +178,36 @@ int cover_position(char *st_str, size_t len) {
     return ESP_FAIL;
 }
 
+void cover_prepareStatusMsg(const cover_ctx_t *ctx) {
+    mqttmsg_t jmsg;
+
+    jmsg.json_str_len = cover_position((char *)&jmsg.json_str, MAX_JSON_STR_LEN);
+    if (jmsg.json_str_len != ESP_FAIL) {
+        strcpy(jmsg.topic, COVER_TOPIC_POS);
+        jmsg.topic_len = sizeof(COVER_TOPIC_POS);
+
+        if (xQueueSend(*cover_module_queue, (void *)&jmsg, (TickType_t)10) != pdPASS)
+            ESP_LOGE(TAG, "Error while pos to queue");
+    }
+
+    jmsg.json_str_len = cover_status((char *)&jmsg.json_str, MAX_JSON_STR_LEN);
+    if (jmsg.json_str_len != ESP_FAIL) {
+        strcpy(jmsg.topic, COVER_TOPIC_STATUS);
+        jmsg.topic_len = sizeof(COVER_TOPIC_STATUS);
+
+        if (xQueueSend(*cover_module_queue, (void *)&jmsg, (TickType_t)10) != pdPASS)
+            ESP_LOGE(TAG, "Error while send status to queue");
+    }
+}
+
+
+static void cover_status_task(void * pvParameter) {
+    while(1) {
+        cover_prepareStatusMsg(local_ctx);
+        DELAY_S(30);
+    }
+}
+
 
 static void cmd_coverSetPos(const char *topic, size_t len_topic, const char *data, size_t len_data) {
     if (len_data == 0 && !data) {
@@ -201,6 +240,37 @@ static void cmd_coverSet(const char *topic, size_t len_topic, const char *data, 
 
 }
 
+static void on_button_up(button_t *btn, button_state_t state)
+{
+    ESP_LOGI(TAG, "UP button %d", state);
+    if (state == BUTTON_PRESSED || state == BUTTON_PRESSED_LONG) {
+        cover_run(100);
+    }
+
+    if (state == BUTTON_RELEASED) {
+        cover_stop();
+    }
+}
+
+static void on_button_down(button_t *btn, button_state_t state)
+{
+    ESP_LOGI(TAG, "DOWN button %d", state);
+    if (state == BUTTON_PRESSED || state == BUTTON_PRESSED_LONG) {
+        cover_run(0);
+    }
+
+    if (state == BUTTON_RELEASED) {
+        cover_stop();
+    }
+}
+
+static CmdMQTT callback_table[] = {
+    { COVER_TOPIC_SET     , cmd_coverSet    } ,
+    { COVER_TOPIC_SET_POS , cmd_coverSetPos } ,
+    { NULL                , NULL            } ,
+};
+
+
 #define COVER_CFG_INIT(key, value, default_value) \
     do { \
         if (cfg_readKey((key), sizeof((key)), &(value)) != ESP_OK) { \
@@ -212,18 +282,14 @@ static void cmd_coverSet(const char *topic, size_t len_topic, const char *data, 
     } while(0)
 
 
-static CmdMQTT callback_table[] = {
-    { COVER_TOPIC_SET     , cmd_coverSet    } ,
-    { COVER_TOPIC_SET_POS , cmd_coverSetPos } ,
-    { NULL                , NULL            } ,
-};
-
-void cover_init(cover_ctx_t *ctx, cover_event_t callback_end) {
+void cover_init(cover_ctx_t *ctx, cover_event_t callback_end, QueueHandle_t *queue) {
     assert(ctx);
     local_ctx = ctx;
     memset(local_ctx, 0, sizeof(cover_ctx_t));
 
     local_ctx->callback_end = callback_end;
+    // register the queue where to put out message for mqtt
+    cover_module_queue = queue;
 
     // Register on mqtt table cover callbacks
     mqtt_mgr_regiterTable(callback_table);
@@ -237,7 +303,22 @@ void cover_init(cover_ctx_t *ctx, cover_event_t callback_end) {
     io_conf.pull_down_en = 0;
     io_conf.pull_up_en = 0;
 
-    gpio_config(&io_conf);
+    /* Configure gpio to read buttons status */
+    btn_up.gpio = BUTTON_UP;
+    btn_up.pressed_level = 0;
+    btn_up.internal_pull = false;
+    btn_up.autorepeat = false;
+    btn_up.callback = on_button_up;
+
+    btn_down.gpio = BUTTON_DOWN;
+    btn_down.pressed_level = 0;
+    btn_down.internal_pull = false;
+    btn_down.autorepeat = false;
+    btn_down.callback = on_button_down;
+
+    ESP_ERROR_CHECK(button_init(&btn_down));
+    ESP_ERROR_CHECK(button_init(&btn_up));
+    ESP_ERROR_CHECK(gpio_config(&io_conf));
 
     TRIAC_OFF();
     TRIAC_SEL_DX();
@@ -253,5 +334,8 @@ void cover_init(cover_ctx_t *ctx, cover_event_t callback_end) {
     // Create task to manage cover traveing time
     xTaskCreate(&cover_run_handler, "cover_run_handler", 8192, NULL, 5, &local_ctx->run_handler);
     vTaskSuspend(local_ctx->run_handler);
+
+    // monitoring status task, publish the cover status
+    xTaskCreate(&cover_status_task, "device_measure_task", 8192, NULL, 10, NULL);
 }
 

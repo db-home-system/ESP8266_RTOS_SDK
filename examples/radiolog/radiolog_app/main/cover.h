@@ -8,6 +8,8 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
+#include "freertos/queue.h"
 
 #define COVER_TOPIC_STATUS    "cover/status"
 #define COVER_TOPIC_POS       "cover/position"
@@ -33,4 +35,5 @@ void cover_run(int position);
 void cover_stop(void);
 int cover_status(char *st_str, size_t len);
 int cover_position(char *st_str, size_t len);
-void cover_init(cover_ctx_t *ctx, cover_event_t callback_end);
+void cover_prepareStatusMsg(const cover_ctx_t *ctx);
+void cover_init(cover_ctx_t *ctx, cover_event_t callback_end, QueueHandle_t *queue);
