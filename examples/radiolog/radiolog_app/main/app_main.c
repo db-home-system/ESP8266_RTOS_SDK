@@ -40,12 +40,6 @@
 //position_topic:     "radiolog/Node_f4a98f/cover/position"
 //set_position_topic: "radiolog/Node_f4a98f/cover/set/position"
 
-#define COVER_TOPIC_AVAILABLE "cover/available"
-#define COVER_TOPIC_STATUS    "cover/status"
-#define COVER_TOPIC_POS       "cover/position"
-#define COVER_TOPIC_SET_POS   "cover/set/position"
-#define COVER_TOPIC_SET       "cover/set"
-
 #define CFG_TOPIC_READ  "cfg/read"
 #define CFG_TOPIC_WRITE "cfg/write"
 #define CFG_TOPIC_DUMP  "cfg/dump"
@@ -130,44 +124,11 @@ void cmd_dumpCfg(const char *topic, size_t len_topic, const char *data, size_t l
 }
 
 
-void cmd_coverSetPos(const char *topic, size_t len_topic, const char *data, size_t len_data) {
-    if (len_data == 0 && !data) {
-        ESP_LOGE(TAG, "Invalid paylod in cover set");
-        return;
-    }
-    cover_run(atoi(data));
-}
-
-void cmd_coverSet(const char *topic, size_t len_topic, const char *data, size_t len_data) {
-    if (len_data == 0 && !data) {
-        ESP_LOGE(TAG, "Invalid paylod in cover set");
-        return;
-    }
-
-    if (!strncmp("open", data, len_data)) {
-        cover_run(100);
-        return;
-    }
-
-    if (!strncmp("close", data, len_data)) {
-        cover_run(0);
-        return;
-    }
-
-    if (!strncmp("stop", data, len_data)) {
-        cover_stop();
-        return;
-    }
-
-}
-
 void cmd_reset(const char *topic, size_t len_topic, const char *data, size_t len_data) {
     esp_restart();
 }
 
 static CmdMQTT callback_table[] = {
-    { COVER_TOPIC_SET     , cmd_coverSet    } ,
-    { COVER_TOPIC_SET_POS , cmd_coverSetPos } ,
     { APP_TOPIC_RESET     , cmd_reset       } ,
     { CFG_TOPIC_READ      , cmd_readCfg     } ,
     { CFG_TOPIC_WRITE     , cmd_writeCfg    } ,
@@ -182,7 +143,6 @@ static void publish_msg(void * pvParameter)
     while (1) {
         if(announce) {
             mqtt_mgr_pub(APP_TOPIC_ANNOUNCE, sizeof(APP_TOPIC_ANNOUNCE), "announce", sizeof("announce") -1);
-            mqtt_mgr_pub(COVER_TOPIC_AVAILABLE, sizeof(COVER_TOPIC_AVAILABLE), "online", sizeof("online") -1);
             announce = false;
         }
 

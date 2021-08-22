@@ -12,6 +12,7 @@
 #include "cover.h"
 #include "cfg.h"
 #include "common.h"
+#include "mqtt_mgr.h"
 #include "macros.h"
 #include "esp_log.h"
 
@@ -166,6 +167,37 @@ int cover_position(char *st_str, size_t len) {
 }
 
 
+static void cmd_coverSetPos(const char *topic, size_t len_topic, const char *data, size_t len_data) {
+    if (len_data == 0 && !data) {
+        ESP_LOGE(TAG, "Invalid paylod in cover set");
+        return;
+    }
+    cover_run(atoi(data));
+}
+
+static void cmd_coverSet(const char *topic, size_t len_topic, const char *data, size_t len_data) {
+    if (len_data == 0 && !data) {
+        ESP_LOGE(TAG, "Invalid paylod in cover set");
+        return;
+    }
+
+    if (!strncmp("open", data, len_data)) {
+        cover_run(100);
+        return;
+    }
+
+    if (!strncmp("close", data, len_data)) {
+        cover_run(0);
+        return;
+    }
+
+    if (!strncmp("stop", data, len_data)) {
+        cover_stop();
+        return;
+    }
+
+}
+
 #define COVER_CFG_INIT(key, value, default_value) \
     do { \
         if (cfg_readKey((key), sizeof((key)), &(value)) != ESP_OK) { \
@@ -176,12 +208,22 @@ int cover_position(char *st_str, size_t len) {
         } \
     } while(0)
 
+
+static CmdMQTT callback_table[] = {
+    { COVER_TOPIC_SET     , cmd_coverSet    } ,
+    { COVER_TOPIC_SET_POS , cmd_coverSetPos } ,
+    { NULL                , NULL            } ,
+};
+
 void cover_init(cover_ctx_t *ctx, cover_event_t callback_end) {
     assert(ctx);
     local_ctx = ctx;
     memset(local_ctx, 0, sizeof(cover_ctx_t));
 
     local_ctx->callback_end = callback_end;
+
+    // Register on mqtt table cover callbacks
+    mqtt_mgr_regiterTable(callback_table);
 
     gpio_config_t io_conf;
 

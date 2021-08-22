@@ -35,37 +35,49 @@ static char root_url[64];
 static char buff[240];
 static esp_mqtt_client_handle_t mqtt_client;
 
-static CmdMQTT *local_callback;
+static CmdMQTTTable local_callbacks;
 static bool is_connect;
 
 static void mqtt_mgr_registerCallbacks(void) {
-    if (!local_callback) {
-        ESP_LOGE(TAG, "Invalid callback table.");
-        return;
-    }
-    for (int i = 0; local_callback[i].topic &&
-            local_callback[i].foo; i++) {
-        sprintf(buff, "%s/%s", root_url, local_callback[i].topic);
-        int msg_id = esp_mqtt_client_subscribe(mqtt_client, buff, 0);
-        ESP_LOGI(TAG, "subscribe %s successful, msg_id=%d", buff, msg_id);
+    for (uint8_t idx = 0; idx < CMD_MAX_POOL_NO; idx++) {
+        CmdMQTT *p = local_callbacks.pool[idx];
+        if (!p) {
+            ESP_LOGE(TAG, "Empty callback table.");
+            continue;
+        }
+
+        for (int i = 0; p[i].topic &&
+                p[i].foo; i++) {
+            sprintf(buff, "%s/%s", root_url, p[i].topic);
+            int msg_id = esp_mqtt_client_subscribe(mqtt_client, buff, 0);
+            ESP_LOGI(TAG, "subscribe %s successful, msg_id=%d", buff, msg_id);
+        }
     }
 }
 
 static mqtt_sub_callback_t mqtt_mgr_searchFoo(const char *topic, size_t len) {
-    for (int i = 0; local_callback[i].topic &&
-            local_callback[i].foo; i++) {
 
-        memset(buff, 0, sizeof(buff));
-        if(sizeof(buff) < len) {
-            ESP_LOGE(TAG, "Unable to copy topic buff, is too long!");
-            return NULL;
+    for (uint8_t idx = 0; idx < CMD_MAX_POOL_NO; idx++) {
+        CmdMQTT *p = local_callbacks.pool[idx];
+        if (!p) {
+            ESP_LOGE(TAG, "Empty callback table.");
+            continue;
         }
-        memcpy(buff, topic, len);
+        for (int i = 0; p[i].topic &&
+                p[i].foo; i++) {
 
-        static char buff2[240];
-        sprintf(buff2, "%s/%s", root_url, local_callback[i].topic);
-        if (!strcmp(buff, buff2)) {
-            return local_callback[i].foo;
+            memset(buff, 0, sizeof(buff));
+            if(sizeof(buff) < len) {
+                ESP_LOGE(TAG, "Unable to copy topic buff, is too long!");
+                return NULL;
+            }
+            memcpy(buff, topic, len);
+
+            static char buff2[240];
+            sprintf(buff2, "%s/%s", root_url, p[i].topic);
+            if (!strcmp(buff, buff2)) {
+                return p[i].foo;
+            }
         }
     }
     return NULL;
@@ -103,6 +115,15 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     }
 }
 
+void mqtt_mgr_regiterTable(CmdMQTT *table) {
+    assert(table);
+    assert(local_callbacks.fill_index+1 < CMD_MAX_POOL_NO);
+
+    local_callbacks.pool[local_callbacks.fill_index] = table;
+    local_callbacks.fill_index++;
+
+}
+
 void mqtt_mgr_pub(char *topic, size_t len_topic, const char *data, size_t len_data) {
     if(!is_connect) {
         ESP_LOGE(TAG, "MQTT client is not connect");
@@ -129,7 +150,9 @@ void mqtt_mgr_init(CmdMQTT *table) {
     assert(table);
 
     is_connect = false;
-    local_callback = table;
+    memset(&local_callbacks, 0, sizeof(local_callbacks));
+    local_callbacks.pool[local_callbacks.fill_index] = table;
+    local_callbacks.fill_index++;
 
     char node_id[24];
     if (common_nodeId(node_id, sizeof(node_id)) < 0) {

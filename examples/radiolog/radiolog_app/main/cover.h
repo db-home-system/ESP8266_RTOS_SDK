@@ -9,6 +9,12 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+#define COVER_TOPIC_STATUS    "cover/status"
+#define COVER_TOPIC_POS       "cover/position"
+#define COVER_TOPIC_SET_POS   "cover/set/position"
+#define COVER_TOPIC_SET       "cover/set"
+
+
 typedef struct CoverCtx cover_ctx_t;
 typedef void (*cover_event_t)(const cover_ctx_t *ctx);
 

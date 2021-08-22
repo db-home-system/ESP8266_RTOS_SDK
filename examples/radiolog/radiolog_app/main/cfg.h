@@ -17,6 +17,9 @@
 esp_err_t cfg_writeKey(const char *key, size_t len_key, uint32_t value);
 esp_err_t cfg_readKey(const char *key, size_t len_key, uint32_t *value);
 esp_err_t cfg_dump(void);
+void cmd_readCfg(const char *topic, size_t len_topic, const char *data, size_t len_data);
+void cmd_writeCfg(const char *topic, size_t len_topic, const char *data, size_t len_data);
+void cmd_dumpCfg(const char *topic, size_t len_topic, const char *data, size_t len_data);
 void cmd_initCfg(void);
 
 
