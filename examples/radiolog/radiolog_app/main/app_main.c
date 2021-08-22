@@ -108,15 +108,18 @@ void app_main(void)
 
     mqtt_mgr_init(callback_table);
     cmd_initCfg(&mqtt_msg_queue);
-    cover_init(&cover_ctx, event_cover_stop, &mqtt_msg_queue);
     measure_init(&mqtt_msg_queue);
 
-    //uint32_t cfg_mode;
-    //esp_err_t ret = cfg_readKey("node_mode", sizeof("node_mode"), &cfg_mode);
-    //if (cfg_mode == CFG_COVER) {
-    //}
-    //if (cfg_mode == CFG_SWITCH)
-    //    switch_init();
+    uint32_t cfg_module_mode;
+    CFG_INIT_VALUE("node_mode", cfg_module_mode, CFG_UNSET_MODE);
+    if (cfg_module_mode == CFG_COVER_MODE) {
+        ESP_LOGI(TAG, "COVER MODE Enable");
+        cover_init(&cover_ctx, event_cover_stop, &mqtt_msg_queue);
+    }
+    if (cfg_module_mode == CFG_SWITCH_MODE) {
+        ESP_LOGI(TAG, "SWITCH MODE Enable");
+        //switch_init();
+    }
 
     xTaskCreate(&publish_msg, "mqtt_pub_task", 8192, NULL, 10, NULL);
 }

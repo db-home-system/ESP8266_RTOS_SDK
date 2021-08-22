@@ -15,8 +15,9 @@
 #include "freertos/queue.h"
 
 #define CFG_NOVALUE 0xFFFFFFFF
-#define CFG_COVER  0
-#define CFG_SWITCH 1
+#define CFG_UNSET_MODE  0
+#define CFG_COVER_MODE  1
+#define CFG_SWITCH_MODE 2
 
 #define CFG_TOPIC_CFG   "cfg"
 #define CFG_TOPIC_READ  "cfg/read"
