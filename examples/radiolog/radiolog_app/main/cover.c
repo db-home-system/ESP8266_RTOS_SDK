@@ -271,16 +271,6 @@ static CmdMQTT callback_table[] = {
 };
 
 
-#define COVER_CFG_INIT(key, value, default_value) \
-    do { \
-        if (cfg_readKey((key), sizeof((key)), &(value)) != ESP_OK) { \
-            ESP_LOGW(TAG, "Use default "key": %d", (value)); \
-            (value) = (default_value); \
-        } else { \
-            ESP_LOGI(TAG, "Get "key": %d", (value)); \
-        } \
-    } while(0)
-
 
 void cover_init(cover_ctx_t *ctx, cover_event_t callback_end, QueueHandle_t *queue) {
     assert(ctx);
@@ -323,13 +313,12 @@ void cover_init(cover_ctx_t *ctx, cover_event_t callback_end, QueueHandle_t *que
     TRIAC_OFF();
     TRIAC_SEL_DX();
 
-
-    COVER_CFG_INIT("cover_open", cfg_cover_open, COVER_OPEN);
-    COVER_CFG_INIT("cover_close", cfg_cover_close, COVER_CLOSE);
-    COVER_CFG_INIT("cover_up_time", cfg_cover_up_time, COVER_TRAVEL_TIME_UP);
-    COVER_CFG_INIT("cover_down_time", cfg_cover_down_time, COVER_TRAVEL_TIME_DOWN);
-    COVER_CFG_INIT("cover_polling_time", cfg_cover_polling_time, COVER_POLLING_TIME);
-    COVER_CFG_INIT("cover_last_position", local_ctx->curr_pos, 0);
+    CFG_INIT_VALUE("cover_open", cfg_cover_open, COVER_OPEN);
+    CFG_INIT_VALUE("cover_close", cfg_cover_close, COVER_CLOSE);
+    CFG_INIT_VALUE("cover_up_time", cfg_cover_up_time, COVER_TRAVEL_TIME_UP);
+    CFG_INIT_VALUE("cover_down_time", cfg_cover_down_time, COVER_TRAVEL_TIME_DOWN);
+    CFG_INIT_VALUE("cover_polling_time", cfg_cover_polling_time, COVER_POLLING_TIME);
+    CFG_INIT_VALUE("cover_last_position", local_ctx->curr_pos, 0);
 
     // Create task to manage cover traveing time
     xTaskCreate(&cover_run_handler, "cover_run_handler", 8192, NULL, 5, &local_ctx->run_handler);

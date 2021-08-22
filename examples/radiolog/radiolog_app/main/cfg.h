@@ -23,6 +23,21 @@
 #define CFG_TOPIC_WRITE "cfg/write"
 #define CFG_TOPIC_DUMP  "cfg/dump"
 
+#define CFG_INIT_VALUE(key, value, default_value) \
+    do { \
+        if (cfg_readKey((key), sizeof((key)), &(value)) != ESP_OK) { \
+            ESP_LOGW(TAG, "Use default "key": %d", (value)); \
+            (value) = (default_value); \
+        } else { \
+            ESP_LOGI(TAG, "Get "key": %d", (value)); \
+        } \
+        if ((value) == CFG_NOVALUE) { \
+            (value) = (default_value); \
+            ESP_LOGW(TAG, "Unset value, use default "key": %d", (value)); \
+        }\
+    } while(0)
+
+
 esp_err_t cfg_writeKey(const char *key, size_t len_key, uint32_t value);
 esp_err_t cfg_readKey(const char *key, size_t len_key, uint32_t *value);
 void cmd_initCfg(QueueHandle_t *queue);
