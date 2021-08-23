@@ -13,6 +13,4 @@
 #define DELAY_S(s)    (vTaskDelay(((s) * 1000) / portTICK_PERIOD_MS))
 #define DELAY_MS(ms)  (vTaskDelay((ms) / portTICK_PERIOD_MS))
 
-int read_dht11(char *meas, size_t len);
-
 #endif /* COMMON_H */

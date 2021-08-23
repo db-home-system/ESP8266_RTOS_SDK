@@ -49,8 +49,7 @@ static const cfgmap_t map[] = {
     { "cover_polling_time"  },
     { "cover_last_position" },
     { "dht11_enable"        },
-    { "temp1_sens_enable"   },
-    { "temp2_sens_enable"   },
+    { "ds18x20_sens_enable" },
     { NULL                  },
 };
 
