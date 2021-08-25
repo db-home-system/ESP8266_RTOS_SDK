@@ -91,12 +91,11 @@ static void measure(void * pvParameter) {
                             temp_c);
 
                     len = sprintf(p, "\"temp%d\":\"%d\",", j, temp_c);
-                    if (len > 0) {
-                        p += len;
-                        jmsg.json_str_len += len;
-                    }
-                    else
+                    if (len < 0)
                         continue;
+
+                    p += len - 1;
+                    jmsg.json_str_len += len - 1;
                 }
                 sprintf(p, "}");
 
