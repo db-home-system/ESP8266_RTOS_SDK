@@ -15,6 +15,7 @@
 #include "esp_event.h"
 #include "esp_netif.h"
 
+#include "verstag.h"
 #include "common.h"
 #include "connect.h"
 #include "cover.h"
@@ -33,7 +34,6 @@
 
 #include "esp_log.h"
 
-#define APP_TOPIC_ANNOUNCE  "announce"
 #define APP_TOPIC_RESET     "reset"
 
 static const char *TAG = "Radiolog";
@@ -51,15 +51,9 @@ static CmdMQTT callback_table[] = {
 };
 
 
-static bool announce = true;
 static void publish_msg(void * pvParameter)
 {
     while (1) {
-        if(announce) {
-            mqtt_mgr_pub(APP_TOPIC_ANNOUNCE, sizeof(APP_TOPIC_ANNOUNCE), "announce", sizeof("announce") -1);
-            announce = false;
-        }
-
         if(!mqtt_msg_queue)
             return;
 
@@ -89,9 +83,9 @@ void app_main(void)
     esp_log_level_set("*", ESP_LOG_INFO);
     esp_log_level_set("MQTT_CLIENT", ESP_LOG_VERBOSE);
     esp_log_level_set("TRANSPORT_TCP", ESP_LOG_VERBOSE);
-    esp_log_level_set("TRANSPORT_SSL", ESP_LOG_VERBOSE);
-    esp_log_level_set("TRANSPORT", ESP_LOG_VERBOSE);
-    esp_log_level_set("OUTBOX", ESP_LOG_VERBOSE);
+    esp_log_level_set("TRANSPORT_SSL", ESP_LOG_NONE);
+    esp_log_level_set("TRANSPORT", ESP_LOG_NONE);
+    esp_log_level_set("OUTBOX", ESP_LOG_NONE);
 
     ESP_ERROR_CHECK(nvs_flash_init());
     ESP_ERROR_CHECK(esp_netif_init());
@@ -107,6 +101,9 @@ void app_main(void)
     assert(mqtt_msg_queue != 0);
 
     mqtt_mgr_init(callback_table);
+
+    xTaskCreate(&publish_msg, "mqtt_pub_task", 8192, NULL, 10, NULL);
+
     cmd_initCfg(&mqtt_msg_queue);
     measure_init(&mqtt_msg_queue);
 
@@ -121,6 +118,6 @@ void app_main(void)
         //switch_init();
     }
 
-    xTaskCreate(&publish_msg, "mqtt_pub_task", 8192, NULL, 10, NULL);
+    device_announce(cfg_module_mode, mqtt_msg_queue);
 }
 

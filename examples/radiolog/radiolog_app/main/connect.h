@@ -20,6 +20,8 @@ extern "C" {
 
 #define RADIOLOG_INTERFACE TCPIP_ADAPTER_IF_STA
 
+#define NODEID_STR_LEN (sizeof("Node_AABBCC") + 2)
+#define IDADDR_STR_LEN (sizeof("111.222.333.444") + 2)
 /**
  * @brief Configure Wi-Fi or Ethernet, connect, wait for IP
  *
@@ -37,8 +39,10 @@ esp_err_t common_disconnect(void);
  */
 esp_err_t common_set_connection_info(const char *ssid, const char *passwd);
 
-esp_err_t common_nodeId(char *id, size_t len);
 void common_ota_task();
+int common_ipAddr(char *id, size_t len);
+int common_nodeId(char *id, size_t len);
+
 
 #ifdef __cplusplus
 }

@@ -91,7 +91,7 @@ static void measure(void * pvParameter) {
                             temp_c);
 
                     len = sprintf(p, "\"temp%d\":\"%d\",", j, temp_c);
-                    if (len < 0)
+                    if (len <= 0)
                         continue;
 
                     p += len - 1;

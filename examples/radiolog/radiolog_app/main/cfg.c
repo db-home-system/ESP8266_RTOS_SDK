@@ -208,6 +208,12 @@ static CmdMQTT callback_table[] = {
     { NULL                , NULL            } ,
 };
 
+const char *node_modes[] = {
+    [CFG_UNSET_MODE]    = "unset",
+    [CFG_COVER_MODE]    = "cover",
+    [CFG_SWITCH_MODE]   = "switch",
+};
+
 void cmd_initCfg(QueueHandle_t *queue) {
     cfg_module_queue = queue;
 

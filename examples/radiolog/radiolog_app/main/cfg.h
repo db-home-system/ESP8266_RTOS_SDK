@@ -43,5 +43,6 @@ esp_err_t cfg_writeKey(const char *key, size_t len_key, uint32_t value);
 esp_err_t cfg_readKey(const char *key, size_t len_key, uint32_t *value);
 void cmd_initCfg(QueueHandle_t *queue);
 
+extern const char *node_modes[];
 
 #endif /* CFG_H */

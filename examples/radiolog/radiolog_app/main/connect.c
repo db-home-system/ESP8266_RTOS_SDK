@@ -186,21 +186,23 @@ esp_err_t common_set_connection_info(const char *ssid, const char *passwd)
     return ESP_OK;
 }
 
-esp_err_t common_nodeId(char *id, size_t len)
+int common_nodeId(char *id, size_t len)
 {
     uint8_t mac[6];
-    if (esp_wifi_get_mac(WIFI_MODE_STA, mac) < 0) {
+    assert(len >= sizeof("Node_AABBCC"));
+
+    if (esp_wifi_get_mac(WIFI_MODE_STA, mac) != ESP_OK) {
         ESP_LOGE(TAG, "Unable to get wifi mac");
         return ESP_FAIL;
     }
 
-    if (len < sizeof("Node_AABBCC")) {
-        ESP_LOGE(TAG, "Buffer to short for nodeid");
-        return ESP_FAIL;
-    }
+    return sprintf(id, "Node_%0x%0x%0x", mac[3], mac[4], mac[5]);
+}
 
-    sprintf(id, "Node_%0x%0x%0x", mac[3], mac[4], mac[5]);
-    return ESP_OK;
+int common_ipAddr(char *id, size_t len)
+{
+    assert(len >= sizeof("111.222.333.444"));
+    return sprintf(id, IPSTR, IP2STR(&s_ip_addr));
 }
 
 esp_err_t _http_event_handler(esp_http_client_event_t *evt)
