@@ -24,6 +24,7 @@
 #include "driver/gpio.h"
 
 #include "esp_err.h"
+#define LOG_LOCAL_LEVEL  ESP_LOG_ERROR
 #include "esp_log.h"    //TODO:No dependence on RTOS
 
 // Temporary use the FreeRTOS critical function

@@ -14,7 +14,6 @@
 #include "sdkconfig.h"
 #include "esp_event.h"
 #include "esp_wifi.h"
-#include "esp_log.h"
 #include "esp_event_loop.h"
 #include "tcpip_adapter.h"
 #include "freertos/FreeRTOS.h"
@@ -28,6 +27,9 @@
 #include "esp_ota_ops.h"
 #include "esp_http_client.h"
 #include "esp_https_ota.h"
+
+#define LOG_LOCAL_LEVEL  ESP_LOG_INFO
+#include "esp_log.h"
 
 #define GOT_IPV4_BIT BIT(0)
 #define GOT_IPV6_BIT BIT(1)

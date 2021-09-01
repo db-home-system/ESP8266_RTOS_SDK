@@ -22,8 +22,10 @@
 #include "cfg.h"
 #include "verstag.h"
 
-#include "esp_log.h"
 #include "esp_system.h"
+
+#include "esp_log.h"
+#define LOG_LOCAL_LEVEL  ESP_LOG_INFO
 
 static const char *TAG = "Com";
 

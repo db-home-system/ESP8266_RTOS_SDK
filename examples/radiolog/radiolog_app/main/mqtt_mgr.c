@@ -26,8 +26,10 @@
 #include "lwip/dns.h"
 #include "lwip/netdb.h"
 
-#include "esp_log.h"
 #include "mqtt_client.h"
+
+#define LOG_LOCAL_LEVEL  ESP_LOG_INFO
+#include "esp_log.h"
 
 static const char *TAG = "mqtt_mgr";
 

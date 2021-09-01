@@ -22,6 +22,8 @@
 #include "mqtt_mgr.h"
 #include "cfg.h"
 #include "measure.h"
+#include "switch.h"
+#include "verstag.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -39,7 +41,6 @@
 static const char *TAG = "Radiolog";
 
 static QueueHandle_t mqtt_msg_queue;
-static cover_ctx_t cover_ctx;
 
 void cmd_reset(const char *topic, size_t len_topic, const char *data, size_t len_data) {
     esp_restart();
@@ -64,7 +65,6 @@ static void publish_msg(void * pvParameter)
                     buff.topic_len, buff.topic, \
                     buff.json_str_len, buff.topic_len);
             mqtt_mgr_pub(buff.topic, buff.topic_len, buff.json_str, buff.json_str_len);
-
         }
         DELAY_MS(500);
     }
@@ -76,13 +76,14 @@ static void event_cover_stop(const cover_ctx_t *ctx) {
 
 void app_main(void)
 {
-    ESP_LOGI(TAG, "[APP] Startup..");
-    ESP_LOGI(TAG, "[APP] Free memory: %d bytes", esp_get_free_heap_size());
-    ESP_LOGI(TAG, "[APP] IDF version: %s", esp_get_idf_version());
+    ESP_LOGI(TAG, "== RadioLog Start ==");
+    ESP_LOGI(TAG, "ver.%s", vers_tag);
+    ESP_LOGI(TAG, "Free memory: %d bytes", esp_get_free_heap_size());
+    ESP_LOGI(TAG, "IDF version: %s", esp_get_idf_version());
 
-    esp_log_level_set("*", ESP_LOG_INFO);
-    esp_log_level_set("MQTT_CLIENT", ESP_LOG_VERBOSE);
-    esp_log_level_set("TRANSPORT_TCP", ESP_LOG_VERBOSE);
+    esp_log_level_set("*", ESP_LOG_NONE);
+    esp_log_level_set("MQTT_CLIENT", ESP_LOG_ERROR);
+    esp_log_level_set("TRANSPORT_TCP", ESP_LOG_ERROR);
     esp_log_level_set("TRANSPORT_SSL", ESP_LOG_NONE);
     esp_log_level_set("TRANSPORT", ESP_LOG_NONE);
     esp_log_level_set("OUTBOX", ESP_LOG_NONE);
@@ -101,7 +102,6 @@ void app_main(void)
     assert(mqtt_msg_queue != 0);
 
     mqtt_mgr_init(callback_table);
-
     xTaskCreate(&publish_msg, "mqtt_pub_task", 8192, NULL, 10, NULL);
 
     cmd_initCfg(&mqtt_msg_queue);
@@ -111,13 +111,13 @@ void app_main(void)
     CFG_INIT_VALUE("node_mode", cfg_module_mode, CFG_UNSET_MODE);
     if (cfg_module_mode == CFG_COVER_MODE) {
         ESP_LOGI(TAG, "COVER MODE Enable");
-        cover_init(&cover_ctx, event_cover_stop, &mqtt_msg_queue);
+        cover_init(event_cover_stop, &mqtt_msg_queue);
     }
     if (cfg_module_mode == CFG_SWITCH_MODE) {
         ESP_LOGI(TAG, "SWITCH MODE Enable");
-        //switch_init();
+        switch_init(&mqtt_msg_queue);
     }
 
-    device_announce(cfg_module_mode, mqtt_msg_queue);
+    device_announce(cfg_module_mode, &mqtt_msg_queue);
 }
 

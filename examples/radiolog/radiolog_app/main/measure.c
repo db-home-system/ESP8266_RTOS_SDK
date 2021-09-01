@@ -11,6 +11,7 @@
 
 #include <dht.h>
 #include <ds18x20.h>
+#include <ads111x.h>
 
 #include "common.h"
 #include "connect.h"
@@ -24,16 +25,28 @@
 #include "freertos/semphr.h"
 #include "freertos/queue.h"
 
+#define LOG_LOCAL_LEVEL  ESP_LOG_INFO
 #include "esp_log.h"
 
 #define ONE_WIRE_PIN    GPIO_NUM_2
 #define MAX_SENSORS              5
 
+#define GAIN ADS111X_GAIN_4V096 // +-4.096V
+
+#define I2C_PORT 0
+#define SDA_GPIO 4
+#define SCL_GPIO 5
+
 static const char *TAG = "Meas";
+
+// Descriptors
+static i2c_dev_t adc_devices;
 
 static QueueHandle_t *measure_module_queue;
 static uint32_t cfg_dh11_enable = false;
 static uint32_t cfg_ds18x20_sens_enable = false;
+static uint32_t cfg_ads111x_adc_enable = false;
+
 static ds18x20_addr_t sensor_addrs[MAX_SENSORS];
 static uint32_t sensor_count = 0;
 
@@ -94,10 +107,10 @@ static void measure(void * pvParameter) {
                     if (len <= 0)
                         continue;
 
-                    p += len - 1;
-                    jmsg.json_str_len += len - 1;
+                    p += len;
+                    jmsg.json_str_len += len;
                 }
-                sprintf(p, "}");
+                sprintf(p--, "}");
 
                 strcpy(jmsg.topic, MEAS_TOPIC);
                 jmsg.topic_len = sizeof(MEAS_TOPIC);
@@ -110,7 +123,22 @@ static void measure(void * pvParameter) {
             }
         }
 
-        DELAY_S(30);
+        if (cfg_ads111x_adc_enable) {
+            ESP_ERROR_CHECK(ads111x_set_input_mux(&adc_devices, ADS111X_MUX_0_GND));    // positive = AIN0, negative = GND
+            bool busy;
+            do
+            {
+                ads111x_is_busy(&adc_devices, &busy);
+            } while (busy);
+            // Read result
+            int16_t raw = 0;
+            if (ads101x_get_value(&adc_devices, &raw) == ESP_OK)
+            {
+                uint32_t voltage = (uint32_t)((ads111x_gain_values[GAIN] / ADS101X_MAX_VALUE * raw) * 1000.0);
+                printf("ADC Raw: %d, voltage: %d\n", raw, voltage);
+            }
+        }
+        DELAY_S(10);
     }
 }
 
@@ -119,6 +147,7 @@ void measure_init(QueueHandle_t *queue) {
 
     CFG_INIT_VALUE("dht11_enable", cfg_dh11_enable, false);
     CFG_INIT_VALUE("ds18x20_sens_enable", cfg_ds18x20_sens_enable, false);
+    CFG_INIT_VALUE("ads111x_adc_enable", cfg_ads111x_adc_enable, false);
 
     if (cfg_ds18x20_sens_enable)
     {
@@ -139,6 +168,23 @@ void measure_init(QueueHandle_t *queue) {
         }
     }
 
+    if (cfg_ads111x_adc_enable) {
+        // Init library
+        ESP_ERROR_CHECK(i2cdev_init());
+
+        // Clear device descriptors
+        memset(&adc_devices, 0, sizeof(adc_devices));
+
+        if (ads111x_init_desc(&adc_devices, ADS111X_ADDR_GND, I2C_PORT, SDA_GPIO, SCL_GPIO) != ESP_OK) {
+            ESP_LOGE(TAG, "Unable to init ADC");
+            cfg_ads111x_adc_enable = false;
+        } else {
+            ESP_ERROR_CHECK(ads111x_set_mode(&adc_devices, ADS111X_MODE_CONTINUOUS));    // Continuous conversion mode
+            ESP_ERROR_CHECK(ads111x_set_data_rate(&adc_devices, ADS111X_DATA_RATE_475)); // 32 samples per second
+            ESP_ERROR_CHECK(ads111x_set_gain(&adc_devices, GAIN));
+        }
+
+    }
     xTaskCreate(&measure, "device_measure_task", 8192, NULL, 10, NULL);
 }
 
