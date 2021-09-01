@@ -25,7 +25,8 @@ cmds = [
     "go"   ,
     "r"    ,
     "w"    ,
-    "dump"
+    "dump",
+    "sw",
 ]
 
 
@@ -65,6 +66,7 @@ cmd_table = {
    cmds[4] : ["radiolog/%s/cfg/read" % NODEID, "ARGS"],
    cmds[5] : ["radiolog/%s/cfg/write" % NODEID, "ARGS"],
    cmds[6] : ["radiolog/%s/cfg/dump" % NODEID, ""],
+   cmds[7] : ["radiolog/%s/switch/set" % NODEID, "ARGS"],
 }
 
 cmd_table_cfg = [
