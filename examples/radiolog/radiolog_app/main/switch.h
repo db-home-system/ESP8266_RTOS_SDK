@@ -12,6 +12,7 @@
 #include "freertos/queue.h"
 
 #define SWITCH_TOPIC      "switch"
+#define SWITCH_TOPIC_SET  "switch/set"
 
 void switch_init(QueueHandle_t *queue);
 
