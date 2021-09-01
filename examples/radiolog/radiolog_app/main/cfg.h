@@ -19,6 +19,9 @@
 #define CFG_COVER_MODE  1
 #define CFG_SWITCH_MODE 2
 
+#define CFG_SWITCH_ON_OFF       0
+#define CFG_SWITCH_MAKE_PULSE   1
+
 #define CFG_TOPIC_CFG   "cfg"
 #define CFG_TOPIC_READ  "cfg/read"
 #define CFG_TOPIC_WRITE "cfg/write"

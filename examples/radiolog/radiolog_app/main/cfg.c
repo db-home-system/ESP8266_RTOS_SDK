@@ -50,6 +50,9 @@ static const cfgmap_t map[] = {
     { "cover_last_position" },
     { "dht11_enable"        },
     { "ds18x20_sens_enable" },
+    { "switch_mode"         },
+    { "switch_pulse_width"  },
+    { "ads111x_adc_enable"  },
     { NULL                  },
 };
 
