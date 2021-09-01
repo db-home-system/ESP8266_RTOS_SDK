@@ -36,4 +36,4 @@ void cover_stop(void);
 int cover_status(char *st_str, size_t len);
 int cover_position(char *st_str, size_t len);
 void cover_prepareStatusMsg(const cover_ctx_t *ctx);
-void cover_init(cover_ctx_t *ctx, cover_event_t callback_end, QueueHandle_t *queue);
+void cover_init(cover_event_t callback_end, QueueHandle_t *queue);

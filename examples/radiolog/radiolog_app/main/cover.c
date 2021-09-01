@@ -55,7 +55,7 @@ static uint32_t cfg_cover_polling_time = COVER_POLLING_TIME;
 
 static button_t btn_up, btn_down;
 static QueueHandle_t *cover_module_queue;
-static cover_ctx_t *local_ctx;
+static cover_ctx_t cover_ctx;
 
 static uint16_t ticks_to_pos(cover_ctx_t *ctx) {
     int32_t p = 0;
@@ -71,35 +71,35 @@ static uint16_t ticks_to_pos(cover_ctx_t *ctx) {
 
 static void motor_off(void) {
     TRIAC_OFF();
-    local_ctx->status = COVER_STOP;
-    local_ctx->curr_pos = ticks_to_pos(local_ctx);
+    cover_ctx.status = COVER_STOP;
+    cover_ctx.curr_pos = ticks_to_pos(&cover_ctx);
 
     // Call notify callback
-    if(local_ctx->callback_end) {
-        local_ctx->callback_end((const cover_ctx_t *)local_ctx);
+    if(cover_ctx.callback_end) {
+        cover_ctx.callback_end((const cover_ctx_t *)&cover_ctx);
     }
     ESP_LOGW(TAG, "Motor off");
 
     uint32_t saved_pos = 0;
     if (cfg_readKey("cover_last_position", sizeof("cover_last_position"), &saved_pos) == ESP_OK)
-        if (local_ctx->curr_pos != saved_pos) {
+        if (cover_ctx.curr_pos != saved_pos) {
             if (cfg_writeKey("cover_last_position", sizeof("cover_last_position"), \
-                        local_ctx->curr_pos) != ESP_OK)
+                        cover_ctx.curr_pos) != ESP_OK)
                 ESP_LOGE(TAG, "Unable to save pos");
         }
 
-    vTaskSuspend(local_ctx->run_handler);
+    vTaskSuspend(cover_ctx.run_handler);
 }
 
 static void cover_run_handler(void * pvParameter)
 {
     while (1) {
-        local_ctx->on_ticks++;
+        cover_ctx.on_ticks++;
         putchar('.');
-        if (!(local_ctx->on_ticks % 10))
+        if (!(cover_ctx.on_ticks % 10))
             putchar('\n');
 
-        if(local_ctx->on_ticks >= local_ctx->ticks_th_stop)
+        if(cover_ctx.on_ticks >= cover_ctx.ticks_th_stop)
             motor_off();
 
         DELAY_MS(cfg_cover_polling_time);
@@ -109,35 +109,35 @@ static void cover_run_handler(void * pvParameter)
 void cover_run(int position) {
 
     // we are just in the same position, do nothing
-    if(local_ctx->curr_pos == position)
+    if(cover_ctx.curr_pos == position)
         return;
 
-    local_ctx->target_pos = position;
-    local_ctx->on_ticks = 0;
+    cover_ctx.target_pos = position;
+    cover_ctx.on_ticks = 0;
 
     // guess direction 0: close; 100: open;
-    local_ctx->direction = cfg_cover_close;
-    local_ctx->status = cfg_cover_close;
-    if(local_ctx->target_pos >= local_ctx->curr_pos) {
-        local_ctx->direction = cfg_cover_open;
-        local_ctx->status = cfg_cover_open;
+    cover_ctx.direction = cfg_cover_close;
+    cover_ctx.status = cfg_cover_close;
+    if(cover_ctx.target_pos >= cover_ctx.curr_pos) {
+        cover_ctx.direction = cfg_cover_open;
+        cover_ctx.status = cfg_cover_open;
     }
 
     //go to desiderate position
-    uint32_t delta_pos = ABS((int32_t)(local_ctx->target_pos - local_ctx->curr_pos));
-    if(local_ctx->direction == cfg_cover_open) {
-        local_ctx->ticks_th_stop = POS_TO_TICKS(delta_pos, cfg_cover_up_time, cfg_cover_polling_time);
+    uint32_t delta_pos = ABS((int32_t)(cover_ctx.target_pos - cover_ctx.curr_pos));
+    if(cover_ctx.direction == cfg_cover_open) {
+        cover_ctx.ticks_th_stop = POS_TO_TICKS(delta_pos, cfg_cover_up_time, cfg_cover_polling_time);
         TRIAC_SEL_SX();
     } else {
-        local_ctx->ticks_th_stop = POS_TO_TICKS(delta_pos, cfg_cover_down_time, cfg_cover_polling_time);
+        cover_ctx.ticks_th_stop = POS_TO_TICKS(delta_pos, cfg_cover_down_time, cfg_cover_polling_time);
         TRIAC_SEL_DX();
     }
 
     ESP_LOGI(TAG, "Run from pos[%d] for on[%u] to DIR[%d]",
-            local_ctx->curr_pos, local_ctx->ticks_th_stop, local_ctx->direction);
+            cover_ctx.curr_pos, cover_ctx.ticks_th_stop, cover_ctx.direction);
 
     TRIAC_ON();
-    vTaskResume(local_ctx->run_handler);
+    vTaskResume(cover_ctx.run_handler);
 }
 
 void cover_stop(void) {
@@ -149,11 +149,11 @@ int cover_status(char *st_str, size_t len) {
     assert(len > 0);
 
     memset(st_str, 0, len);
-    if (local_ctx->status == cfg_cover_close) {
+    if (cover_ctx.status == cfg_cover_close) {
         strcpy(st_str, "close");
         return sizeof("close") -1;
     }
-    if (local_ctx->status == COVER_STOP) {
+    if (cover_ctx.status == COVER_STOP) {
         strcpy(st_str, "stop");
         return sizeof("stop") -1;
     }
@@ -170,8 +170,8 @@ int cover_position(char *st_str, size_t len) {
 
     int ret = sprintf(st_str,
             "{\"position\":\"%d\", \"ticks\":\"%d\"}",
-            local_ctx->curr_pos,
-            local_ctx->on_ticks);
+            cover_ctx.curr_pos,
+            cover_ctx.on_ticks);
     if (ret > 0)
         return ret;
 
@@ -203,7 +203,7 @@ void cover_prepareStatusMsg(const cover_ctx_t *ctx) {
 
 static void cover_status_task(void * pvParameter) {
     while(1) {
-        cover_prepareStatusMsg(local_ctx);
+        cover_prepareStatusMsg(&cover_ctx);
         DELAY_S(30);
     }
 }
@@ -272,12 +272,10 @@ static CmdMQTT callback_table[] = {
 
 
 
-void cover_init(cover_ctx_t *ctx, cover_event_t callback_end, QueueHandle_t *queue) {
-    assert(ctx);
-    local_ctx = ctx;
-    memset(local_ctx, 0, sizeof(cover_ctx_t));
+void cover_init(cover_event_t callback_end, QueueHandle_t *queue) {
+    memset(&cover_ctx, 0, sizeof(cover_ctx_t));
 
-    local_ctx->callback_end = callback_end;
+    cover_ctx.callback_end = callback_end;
     // register the queue where to put out message for mqtt
     cover_module_queue = queue;
 
@@ -318,11 +316,11 @@ void cover_init(cover_ctx_t *ctx, cover_event_t callback_end, QueueHandle_t *que
     CFG_INIT_VALUE("cover_up_time", cfg_cover_up_time, COVER_TRAVEL_TIME_UP);
     CFG_INIT_VALUE("cover_down_time", cfg_cover_down_time, COVER_TRAVEL_TIME_DOWN);
     CFG_INIT_VALUE("cover_polling_time", cfg_cover_polling_time, COVER_POLLING_TIME);
-    CFG_INIT_VALUE("cover_last_position", local_ctx->curr_pos, 0);
+    CFG_INIT_VALUE("cover_last_position", cover_ctx.curr_pos, 0);
 
     // Create task to manage cover traveing time
-    xTaskCreate(&cover_run_handler, "cover_run_handler", 8192, NULL, 5, &local_ctx->run_handler);
-    vTaskSuspend(local_ctx->run_handler);
+    xTaskCreate(&cover_run_handler, "cover_run_handler", 8192, NULL, 5, &cover_ctx.run_handler);
+    vTaskSuspend(cover_ctx.run_handler);
 
     // monitoring status task, publish the cover status
     xTaskCreate(&cover_status_task, "device_measure_task", 8192, NULL, 10, NULL);
