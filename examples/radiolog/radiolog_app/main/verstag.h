@@ -14,7 +14,7 @@
 #define APP_COPYRIGHT "Copyright 2021 Daniele Basile <asterix24@gmail.com>"
 
 #define VERS_MAJOR 0
-#define VERS_MINOR 1
+#define VERS_MINOR 2
 #define VERS_REV   0
 #define VERS_LETTER ""
 
