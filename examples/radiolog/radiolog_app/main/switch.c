@@ -17,6 +17,7 @@
 #include "mqtt_mgr.h"
 #include "cfg.h"
 #include "switch.h"
+#include "macros.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -25,12 +26,13 @@
 
 #include "esp_log.h"
 
-#define BTN_PIN       14
+#define BTN_PIN        0
 #define TRIAC_SX_PIN  16
+#define VOLT_PRESENT  14
 #define SWITCH_ON()  (gpio_set_level(TRIAC_SX_PIN, 1))
 #define SWITCH_OFF() (gpio_set_level(TRIAC_SX_PIN, 0))
 
-#define CFG_SWITCH_PULSE_WIDTH    500 //ms
+#define CFG_SWITCH_PULSE_WIDTH    1000 //ms
 
 #define SWITCH_PULSE(delay) \
     do { \
@@ -66,7 +68,8 @@ static void switch_sendStatus(void) {
 static void switch_status(void * pvParameter) {
     while(1) {
         switch_sendStatus();
-        DELAY_S(30);
+        ESP_LOGE(TAG, "[%d]", gpio_get_level(VOLT_PRESENT));
+        DELAY_S(10);
     }
 }
 
@@ -135,18 +138,24 @@ void switch_init(QueueHandle_t *queue) {
     // Register on mqtt table cover callbacks
     mqtt_mgr_regiterTable(callback_table);
 
-    /* Configure gpio to read buttons status */
-    btn_switch.gpio = BTN_PIN;
-    btn_switch.pressed_level = 0;
-    btn_switch.internal_pull = false;
-    btn_switch.autorepeat = false;
-    btn_switch.callback = on_button;
-
-
     CFG_INIT_VALUE("switch_mode", cfg_switch_mode, CFG_NOVALUE);
     CFG_INIT_VALUE("switch_pulse_width", cfg_switch_pulse_width, CFG_SWITCH_PULSE_WIDTH);
 
-    //ESP_ERROR_CHECK(button_init(&btn_switch));
+    gpio_set_direction(VOLT_PRESENT, GPIO_MODE_INPUT);
+    gpio_set_pull_mode(VOLT_PRESENT, GPIO_FLOATING);
+
+    gpio_set_direction(TRIAC_SX_PIN, GPIO_MODE_OUTPUT);
+    gpio_set_pull_mode(TRIAC_SX_PIN, GPIO_PULLUP_ONLY);
+
+
+    /* Configure gpio to read buttons status */
+    btn_switch.gpio = BTN_PIN;
+    btn_switch.pressed_level = 0;
+    btn_switch.internal_pull = true;
+    btn_switch.autorepeat = false;
+    btn_switch.callback = on_button;
+
+    ESP_ERROR_CHECK(button_init(&btn_switch));
 
     SWITCH_OFF();
     is_switch_on = false;
