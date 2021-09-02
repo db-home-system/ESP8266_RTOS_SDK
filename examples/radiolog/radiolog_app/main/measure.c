@@ -31,7 +31,8 @@
 #define ONE_WIRE_PIN    GPIO_NUM_2
 #define MAX_SENSORS              5
 
-#define GAIN ADS111X_GAIN_4V096 // +-4.096V
+#define GAIN        ADS111X_GAIN_4V096 // +-4.096V
+#define GAIN_VALUE  4096
 
 #define I2C_PORT 0
 #define SDA_GPIO 4
@@ -49,6 +50,8 @@ static uint32_t cfg_ads111x_adc_enable = false;
 
 static ds18x20_addr_t sensor_addrs[MAX_SENSORS];
 static uint32_t sensor_count = 0;
+
+static int16_t current_sample[24];
 
 static int read_dht11(char *meas, size_t len) {
     assert(meas);
@@ -110,7 +113,8 @@ static void measure(void * pvParameter) {
                     p += len;
                     jmsg.json_str_len += len;
                 }
-                sprintf(p--, "}");
+                p--;
+                sprintf(p, "}");
 
                 strcpy(jmsg.topic, MEAS_TOPIC);
                 jmsg.topic_len = sizeof(MEAS_TOPIC);
@@ -125,22 +129,62 @@ static void measure(void * pvParameter) {
 
         if (cfg_ads111x_adc_enable) {
             ESP_ERROR_CHECK(ads111x_set_input_mux(&adc_devices, ADS111X_MUX_0_GND));    // positive = AIN0, negative = GND
-            bool busy;
-            do
-            {
-                ads111x_is_busy(&adc_devices, &busy);
-            } while (busy);
-            // Read result
-            int16_t raw = 0;
-            if (ads101x_get_value(&adc_devices, &raw) == ESP_OK)
-            {
-                uint32_t voltage = (uint32_t)((ads111x_gain_values[GAIN] / ADS101X_MAX_VALUE * raw) * 1000.0);
-                printf("ADC Raw: %d, voltage: %d\n", raw, voltage);
+            int idx = 0;
+            uint32_t avg = 0;
+            for (int i = 0; i < 24; i++) {
+                bool busy;
+                do
+                {
+                    ads111x_is_busy(&adc_devices, &busy);
+                } while (busy);
+
+                int16_t raw;
+                if (ads101x_get_value(&adc_devices, &raw) == ESP_OK)
+                {
+                    current_sample[i] = GAIN_VALUE / ADS101X_MAX_VALUE * raw;
+                    avg += current_sample[i];
+                    idx++;
+                }
             }
+            printf("ADC sample: %d, avg: %d\n", idx, avg/idx);
+
+            memset((void *)&jmsg, 0, sizeof(jmsg));
+            char *p = jmsg.json_str;
+            int len = sprintf(p, "{\"curr\":[");
+            jmsg.json_str_len += len;
+            p += len;
+            for (int j = 0; j < idx; j++)
+            {
+                len = sprintf(p, "%d,", current_sample[j]);
+                if (len <= 0)
+                    continue;
+
+                p += len;
+                jmsg.json_str_len += len;
+            }
+            p--;
+            jmsg.json_str_len++;
+            sprintf(p, "]}");
+
+            strcpy(jmsg.topic, MEAS_TOPIC);
+            jmsg.topic_len = sizeof(MEAS_TOPIC);
+
+            if (xQueueSend(*measure_module_queue, (void *)&jmsg, (TickType_t)10) != pdPASS)
+                ESP_LOGE(TAG, "Error while send meas to queue");
+
         }
         DELAY_S(10);
     }
 }
+
+#define CHECK_RET(foo, msg) \
+    do { \
+        if ((foo) != ESP_OK) { \
+            ESP_LOGE(TAG, (msg)); \
+            cfg_ads111x_adc_enable = 0; \
+            goto exit; \
+        } \
+    } while (0)
 
 void measure_init(QueueHandle_t *queue) {
     measure_module_queue = queue;
@@ -169,22 +213,16 @@ void measure_init(QueueHandle_t *queue) {
     }
 
     if (cfg_ads111x_adc_enable) {
-        // Init library
-        ESP_ERROR_CHECK(i2cdev_init());
-
-        // Clear device descriptors
         memset(&adc_devices, 0, sizeof(adc_devices));
 
-        if (ads111x_init_desc(&adc_devices, ADS111X_ADDR_GND, I2C_PORT, SDA_GPIO, SCL_GPIO) != ESP_OK) {
-            ESP_LOGE(TAG, "Unable to init ADC");
-            cfg_ads111x_adc_enable = false;
-        } else {
-            ESP_ERROR_CHECK(ads111x_set_mode(&adc_devices, ADS111X_MODE_CONTINUOUS));    // Continuous conversion mode
-            ESP_ERROR_CHECK(ads111x_set_data_rate(&adc_devices, ADS111X_DATA_RATE_475)); // 32 samples per second
-            ESP_ERROR_CHECK(ads111x_set_gain(&adc_devices, GAIN));
-        }
-
+        CHECK_RET(i2cdev_init(), "Can't init i2c");
+        CHECK_RET(ads111x_init_desc(&adc_devices, ADS111X_ADDR_GND, I2C_PORT, SDA_GPIO, SCL_GPIO), "Can't init adc");
+        CHECK_RET(ads111x_set_mode(&adc_devices, ADS111X_MODE_CONTINUOUS), "ADC setting error");
+        CHECK_RET(ads111x_set_data_rate(&adc_devices, ADS111X_DATA_RATE_475) , "ADC setting error");
+        CHECK_RET(ads111x_set_gain(&adc_devices, GAIN) , "ADC setting error");
     }
+
+exit:
     xTaskCreate(&measure, "device_measure_task", 8192, NULL, 10, NULL);
 }
 

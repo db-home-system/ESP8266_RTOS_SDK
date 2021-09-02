@@ -22,7 +22,7 @@ typedef struct CmdMQTTTable {
     CmdMQTT *pool[CMD_MAX_POOL_NO];
 } CmdMQTTTable;
 
-#define MAX_JSON_STR_LEN 80
+#define MAX_JSON_STR_LEN 200
 #define MAX_TOPIC_LEN 50
 
 typedef struct MqttMsg
