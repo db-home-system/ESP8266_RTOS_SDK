@@ -87,7 +87,6 @@ static esp_err_t cfg_dump(void) {
 
 
 esp_err_t cfg_readKey(const char *key, size_t len_key, uint32_t *value) {
-    //ESP_LOGW(TAG, "Read: %.*s", len_key, key);
     *value = CFG_NOVALUE;
     for (size_t i = 0; map[i].key; i++) {
         if (!strncmp(key, map[i].key, len_key)) {
@@ -97,7 +96,6 @@ esp_err_t cfg_readKey(const char *key, size_t len_key, uint32_t *value) {
             const esp_partition_t *prt = esp_partition_find_first(ESP_PARTITION_TYPE_DATA,
                     ESP_PARTITION_SUBTYPE_DATA_NVS, "config");
             if(prt) {
-                //ESP_LOGI(TAG, "Get partition %d %s", prt->address, prt->label);
                 size_t offset = i * sizeof(uint32_t);
                 esp_err_t ret = esp_partition_read(prt, offset, (uint8_t *)value, sizeof(uint32_t));
                 if (ret == ESP_OK)
@@ -126,7 +124,7 @@ esp_err_t cfg_writeKey(const char *key, size_t len_key, uint32_t value) {
             if(prt) {
                 memset(tmp, 0xff, sizeof(tmp));
                 size_t offset = i * sizeof(uint32_t);
-                ESP_LOGI(TAG, "key: %s offset: %d size: %d", map[i].key, offset, sizeof(uint32_t));
+                //ESP_LOGI(TAG, "key: %s offset: %d size: %d", map[i].key, offset, sizeof(uint32_t));
                 size_t page = (offset / SPI_FLASH_SEC_SIZE) * SPI_FLASH_SEC_SIZE;
 
                 esp_err_t ret = esp_partition_read(prt, page, (uint8_t *)tmp, sizeof(tmp));
@@ -141,7 +139,7 @@ esp_err_t cfg_writeKey(const char *key, size_t len_key, uint32_t value) {
                     return ret;
                 }
                 tmp[offset/sizeof(uint32_t)] = value;
-                ESP_LOGI(TAG, "page %d off %d v %d", page, offset, value);
+                //ESP_LOGI(TAG, "page %d off %d v %d", page, offset, value);
 
                 ret = esp_partition_write(prt, page, (char *)tmp, sizeof(tmp));
                 if (ret == ESP_OK) {
@@ -194,9 +192,8 @@ static void cmd_writeCfg(const char *topic, size_t len_topic, const char *data, 
     if (found_key) {
         char *p;
         uint32_t v = strtol(value, &p, 10);
-        esp_err_t ret = cfg_writeKey(data, len_key, v);
-        if (ret == ESP_OK)
-            ESP_LOGI(TAG, ">> %d << %.*s", v, len_key, data);
+        if (cfg_writeKey(data, len_key, v) == ESP_OK)
+            ESP_LOGI(TAG, "[%d] %.*s", v, len_key, data);
     }
 }
 
