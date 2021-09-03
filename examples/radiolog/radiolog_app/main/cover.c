@@ -28,8 +28,7 @@
 #define TRIAC_ENABLE    14
 #define TRIAC_DIR       16
 
-#define TRIAC_SEL_DX() (gpio_set_level(TRIAC_DIR, 1))
-#define TRIAC_SEL_SX() (gpio_set_level(TRIAC_DIR, 0))
+#define TRIAC_DIRECTION(dir) (gpio_set_level(TRIAC_DIR, (dir) > 0 ? 0:1))
 #define TRIAC_ON() (gpio_set_level(TRIAC_ENABLE, 1))
 #define TRIAC_OFF() (gpio_set_level(TRIAC_ENABLE, 0))
 
@@ -56,6 +55,7 @@ static uint32_t cfg_cover_polling_time = COVER_POLLING_TIME;
 static button_t btn_up, btn_down;
 static QueueHandle_t *cover_module_queue;
 static cover_ctx_t cover_ctx;
+static bool skip_fist_tick = true;
 
 static uint16_t ticks_to_pos(cover_ctx_t *ctx) {
     int32_t p = 0;
@@ -94,14 +94,20 @@ static void motor_off(void) {
 static void cover_run_handler(void * pvParameter)
 {
     while (1) {
+        if (skip_fist_tick) {
+            skip_fist_tick = false;
+            goto skip;
+        }
+
         cover_ctx.on_ticks++;
         putchar('.');
-        if (!(cover_ctx.on_ticks % 10))
+        if (!(cover_ctx.on_ticks % 5))
             putchar('\n');
 
         if(cover_ctx.on_ticks >= cover_ctx.ticks_th_stop)
             motor_off();
 
+skip:
         DELAY_MS(cfg_cover_polling_time);
     }
 }
@@ -125,17 +131,18 @@ void cover_run(int position) {
 
     //go to desiderate position
     uint32_t delta_pos = ABS((int32_t)(cover_ctx.target_pos - cover_ctx.curr_pos));
+    printf("d[%d] dir[%d]\n", delta_pos, cover_ctx.direction);
+
     if(cover_ctx.direction == cfg_cover_open) {
         cover_ctx.ticks_th_stop = POS_TO_TICKS(delta_pos, cfg_cover_up_time, cfg_cover_polling_time);
-        TRIAC_SEL_SX();
     } else {
         cover_ctx.ticks_th_stop = POS_TO_TICKS(delta_pos, cfg_cover_down_time, cfg_cover_polling_time);
-        TRIAC_SEL_DX();
     }
 
     ESP_LOGI(TAG, "Run from pos[%d] for on[%u] to DIR[%d]",
             cover_ctx.curr_pos, cover_ctx.ticks_th_stop, cover_ctx.direction);
 
+    TRIAC_DIRECTION(cover_ctx.direction);
     TRIAC_ON();
     vTaskResume(cover_ctx.run_handler);
 }
@@ -308,9 +315,6 @@ void cover_init(cover_event_t callback_end, QueueHandle_t *queue) {
     ESP_ERROR_CHECK(button_init(&btn_up));
     ESP_ERROR_CHECK(gpio_config(&io_conf));
 
-    TRIAC_OFF();
-    TRIAC_SEL_DX();
-
     CFG_INIT_VALUE("cover_open", cfg_cover_open, COVER_OPEN);
     CFG_INIT_VALUE("cover_close", cfg_cover_close, COVER_CLOSE);
     CFG_INIT_VALUE("cover_up_time", cfg_cover_up_time, COVER_TRAVEL_TIME_UP);
@@ -318,11 +322,15 @@ void cover_init(cover_event_t callback_end, QueueHandle_t *queue) {
     CFG_INIT_VALUE("cover_polling_time", cfg_cover_polling_time, COVER_POLLING_TIME);
     CFG_INIT_VALUE("cover_last_position", cover_ctx.curr_pos, 0);
 
+    TRIAC_OFF();
+    TRIAC_DIRECTION(cfg_cover_close);
+
+    // monitoring status task, publish the cover status
+    xTaskCreate(&cover_status_task, "device_measure_task", 8192, NULL, 5, NULL);
+
     // Create task to manage cover traveing time
     xTaskCreate(&cover_run_handler, "cover_run_handler", 8192, NULL, 5, &cover_ctx.run_handler);
     vTaskSuspend(cover_ctx.run_handler);
 
-    // monitoring status task, publish the cover status
-    xTaskCreate(&cover_status_task, "device_measure_task", 8192, NULL, 10, NULL);
 }
 
