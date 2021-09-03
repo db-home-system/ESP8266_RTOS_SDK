@@ -54,7 +54,13 @@ void device_announce(uint32_t mode, QueueHandle_t *queue)
         strcpy(jmsg.topic, APP_TOPIC_ANNOUNCE);
         jmsg.topic_len = sizeof(APP_TOPIC_ANNOUNCE);
 
-        if (xQueueSend(*queue, (void *)&jmsg, (TickType_t)10) != pdPASS)
+        int retry = 2;
+        do {
+            if (xQueueSend(*queue, (void *)&jmsg, (TickType_t)10) == pdPASS)
+                break;
+            DELAY_MS(500);
             ESP_LOGE(TAG, "Error while annouce to queue");
+            retry--;
+        } while (retry > 0);
     }
 }
