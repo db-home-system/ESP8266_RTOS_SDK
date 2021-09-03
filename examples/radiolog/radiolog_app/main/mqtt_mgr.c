@@ -28,7 +28,7 @@
 
 #include "mqtt_client.h"
 
-#define LOG_LOCAL_LEVEL  ESP_LOG_INFO
+#define LOG_LOCAL_LEVEL  ESP_LOG_WARN
 #include "esp_log.h"
 
 static const char *TAG = "mqtt_mgr";
