@@ -29,8 +29,8 @@
 #define BTN_PIN        0
 #define TRIAC_SX_PIN  16
 #define VOLT_PRESENT  14
-#define SWITCH_ON()  (gpio_set_level(TRIAC_SX_PIN, 1))
-#define SWITCH_OFF() (gpio_set_level(TRIAC_SX_PIN, 0))
+#define SWITCH_ON()  (gpio_set_level(TRIAC_SX_PIN, 0))
+#define SWITCH_OFF() (gpio_set_level(TRIAC_SX_PIN, 1))
 
 #define CFG_SWITCH_PULSE_WIDTH    1000 //ms
 
@@ -54,6 +54,11 @@ static void switch_sendStatus(void) {
     mqttmsg_t jmsg;
     memset((void *)&jmsg, 0, sizeof(jmsg));
 
+    // In pulse mode, we overwrite the status set by user command
+    // and take as true the presence circuit
+    if (cfg_switch_mode == CFG_SWITCH_MAKE_PULSE)
+        is_switch_on = gpio_get_level(VOLT_PRESENT) ? false : true;
+
     jmsg.json_str_len = sprintf((char *)&jmsg.json_str,
             "{\"status\":\"%s\"}", is_switch_on ? "on":"off");
     if (jmsg.json_str_len != ESP_FAIL) {
@@ -68,7 +73,6 @@ static void switch_sendStatus(void) {
 static void switch_status(void * pvParameter) {
     while(1) {
         switch_sendStatus();
-        ESP_LOGE(TAG, "[%d]", gpio_get_level(VOLT_PRESENT));
         DELAY_S(10);
     }
 }
@@ -83,6 +87,7 @@ static void switch_on(bool on)
         }
 
         is_switch_on = true;
+
     } else {
         if (cfg_switch_mode == CFG_SWITCH_MAKE_PULSE) {
             SWITCH_PULSE(cfg_switch_pulse_width);
@@ -141,12 +146,21 @@ void switch_init(QueueHandle_t *queue) {
     CFG_INIT_VALUE("switch_mode", cfg_switch_mode, CFG_NOVALUE);
     CFG_INIT_VALUE("switch_pulse_width", cfg_switch_pulse_width, CFG_SWITCH_PULSE_WIDTH);
 
-    gpio_set_direction(VOLT_PRESENT, GPIO_MODE_INPUT);
-    gpio_set_pull_mode(VOLT_PRESENT, GPIO_FLOATING);
+    gpio_config_t io_conf;
 
-    gpio_set_direction(TRIAC_SX_PIN, GPIO_MODE_OUTPUT);
-    gpio_set_pull_mode(TRIAC_SX_PIN, GPIO_PULLUP_ONLY);
+    io_conf.intr_type = GPIO_INTR_DISABLE;
+    io_conf.mode = GPIO_MODE_INPUT;
+    io_conf.pin_bit_mask = BV(VOLT_PRESENT);
+    io_conf.pull_down_en = 0;
+    io_conf.pull_up_en = 0;
+    gpio_config(&io_conf);
 
+    io_conf.intr_type = GPIO_INTR_DISABLE;
+    io_conf.mode = GPIO_MODE_OUTPUT;
+    io_conf.pin_bit_mask = BV(TRIAC_SX_PIN);
+    io_conf.pull_down_en = 0;
+    io_conf.pull_up_en = 0;
+    gpio_config(&io_conf);
 
     /* Configure gpio to read buttons status */
     btn_switch.gpio = BTN_PIN;

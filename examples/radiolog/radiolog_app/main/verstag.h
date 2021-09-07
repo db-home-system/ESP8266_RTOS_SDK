@@ -15,7 +15,7 @@
 
 #define VERS_MAJOR 0
 #define VERS_MINOR 2
-#define VERS_REV   2
+#define VERS_REV   3
 #define VERS_LETTER ""
 
 #define __STRINGIZE(x) #x

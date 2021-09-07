@@ -173,7 +173,7 @@ static void measure(void * pvParameter) {
                 ESP_LOGE(TAG, "Error while send meas to queue");
 
         }
-        DELAY_S(10);
+        DELAY_S(60);
     }
 }
 

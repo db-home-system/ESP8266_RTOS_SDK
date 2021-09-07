@@ -131,8 +131,6 @@ void cover_run(int position) {
 
     //go to desiderate position
     uint32_t delta_pos = ABS((int32_t)(cover_ctx.target_pos - cover_ctx.curr_pos));
-    printf("d[%d] dir[%d]\n", delta_pos, cover_ctx.direction);
-
     if(cover_ctx.direction == cfg_cover_open) {
         cover_ctx.ticks_th_stop = POS_TO_TICKS(delta_pos, cfg_cover_up_time, cfg_cover_polling_time);
     } else {
