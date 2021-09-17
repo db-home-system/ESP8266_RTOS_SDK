@@ -47,6 +47,7 @@ static QueueHandle_t *measure_module_queue;
 static uint32_t cfg_dh11_enable = false;
 static uint32_t cfg_ds18x20_sens_enable = false;
 static uint32_t cfg_ads111x_adc_enable = false;
+static uint32_t cfg_measure_poll_time = 60;
 
 static ds18x20_addr_t sensor_addrs[MAX_SENSORS];
 static uint32_t sensor_count = 0;
@@ -173,7 +174,7 @@ static void measure(void * pvParameter) {
                 ESP_LOGE(TAG, "Error while send meas to queue");
 
         }
-        DELAY_S(60);
+        DELAY_S(cfg_measure_poll_time);
     }
 }
 
@@ -192,6 +193,7 @@ void measure_init(QueueHandle_t *queue) {
     CFG_INIT_VALUE("dht11_enable", cfg_dh11_enable, false);
     CFG_INIT_VALUE("ds18x20_sens_enable", cfg_ds18x20_sens_enable, false);
     CFG_INIT_VALUE("ads111x_adc_enable", cfg_ads111x_adc_enable, false);
+    CFG_INIT_VALUE("measure_poll_time", cfg_measure_poll_time, 60);
 
     if (cfg_ds18x20_sens_enable)
     {

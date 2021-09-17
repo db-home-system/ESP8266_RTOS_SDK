@@ -53,6 +53,7 @@ static const cfgmap_t map[] = {
     { "switch_mode"         },
     { "switch_pulse_width"  },
     { "ads111x_adc_enable"  },
+    { "measure_poll_time"   },
     { NULL                  },
 };
 
