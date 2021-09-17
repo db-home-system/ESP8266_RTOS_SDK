@@ -155,16 +155,16 @@ int cover_status(char *st_str, size_t len) {
 
     memset(st_str, 0, len);
     if (cover_ctx.status == cfg_cover_close) {
-        strcpy(st_str, "close");
-        return sizeof("close") -1;
+        strcpy(st_str, "closing");
+        return sizeof("closing") -1;
     }
     if (cover_ctx.status == COVER_STOP) {
-        strcpy(st_str, "stop");
-        return sizeof("stop") -1;
+        strcpy(st_str, "stopped");
+        return sizeof("stopped") -1;
     }
 
-    strcpy(st_str, "open");
-    return sizeof("open") -1;
+    strcpy(st_str, "opening");
+    return sizeof("opening") -1;
 }
 
 int cover_position(char *st_str, size_t len) {
@@ -272,7 +272,7 @@ static void on_button_down(button_t *btn, button_state_t state)
 static CmdMQTT callback_table[] = {
     { COVER_TOPIC_SET     , cmd_coverSet    } ,
     { COVER_TOPIC_SET_POS , cmd_coverSetPos } ,
-    { NULL                , NULL            } ,
+    { NULL                , NULL    },
 };
 
 
