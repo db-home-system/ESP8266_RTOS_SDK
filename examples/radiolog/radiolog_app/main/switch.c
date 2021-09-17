@@ -155,12 +155,14 @@ void switch_init(QueueHandle_t *queue) {
     io_conf.pull_up_en = 0;
     gpio_config(&io_conf);
 
-    io_conf.intr_type = GPIO_INTR_DISABLE;
-    io_conf.mode = GPIO_MODE_OUTPUT;
-    io_conf.pin_bit_mask = BV(TRIAC_SX_PIN);
-    io_conf.pull_down_en = 0;
-    io_conf.pull_up_en = 0;
-    gpio_config(&io_conf);
+    gpio_config_t o_conf;
+
+    o_conf.intr_type = GPIO_INTR_DISABLE;
+    o_conf.mode = GPIO_MODE_OUTPUT;
+    o_conf.pin_bit_mask = BV(TRIAC_SX_PIN);
+    o_conf.pull_down_en = 0;
+    o_conf.pull_up_en = 0;
+    gpio_config(&o_conf);
 
     /* Configure gpio to read buttons status */
     btn_switch.gpio = BTN_PIN;
