@@ -31,6 +31,7 @@ cmds = [
     "sw",
     "log",
     "file",
+    "tdir",
 ]
 
 
@@ -74,6 +75,7 @@ cmd_table = {
     cmds[8]: ["radiolog/%s/switch/set" % NODEID, "ARGS"],
     cmds[9]: [],
     cmds[10]: [],
+    cmds[11]: ["radiolog/%s/cover/test/direction" % NODEID, "ARGS"],
 }
 
 
