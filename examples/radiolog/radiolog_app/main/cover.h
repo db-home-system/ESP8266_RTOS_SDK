@@ -15,6 +15,7 @@
 #define COVER_TOPIC_POS       "cover/position"
 #define COVER_TOPIC_SET_POS   "cover/set/position"
 #define COVER_TOPIC_SET       "cover/set"
+#define COVER_TOPIC_TEST_DIR  "cover/test/direction"
 
 
 typedef struct CoverCtx cover_ctx_t;

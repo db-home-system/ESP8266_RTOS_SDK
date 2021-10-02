@@ -28,7 +28,7 @@
 #define TRIAC_ENABLE    14
 #define TRIAC_DIR       16
 
-#define TRIAC_DIRECTION(dir) (gpio_set_level(TRIAC_DIR, (dir) > 0 ? 0:1))
+#define TRIAC_DIRECTION(dir) (gpio_set_level(TRIAC_DIR, dir))
 #define TRIAC_ON() (gpio_set_level(TRIAC_ENABLE, 1))
 #define TRIAC_OFF() (gpio_set_level(TRIAC_ENABLE, 0))
 
@@ -42,7 +42,7 @@
 #define COVER_TRAVEL_TIME_UP 25
 #define COVER_TRAVEL_TIME_DOWN 24
 
-#define POS_TO_TICKS(p, tt, pollingtime) ((((tt) * 1000) / (pollingtime))  * (p) / 100)
+#define POS_TO_TICKS(p, tt, pollingtime) (((((tt) * 1000) / (pollingtime))  * (p)) / 100)
 
 static const char *TAG = "cover";
 
@@ -130,7 +130,9 @@ void cover_run(int position) {
     }
 
     //go to desiderate position
-    uint32_t delta_pos = ABS((int32_t)(cover_ctx.target_pos - cover_ctx.curr_pos));
+    uint32_t delta_pos = MINMAX(0, ABS((int32_t)cover_ctx.target_pos - (int32_t)cover_ctx.curr_pos), 100);
+    //ESP_LOGW(TAG, "tp[%u], cp[%u]", cover_ctx.target_pos, cover_ctx.curr_pos);
+    //ESP_LOGW(TAG, "p[%u] tt[%u], pll[%u]", delta_pos, cfg_cover_up_time, cfg_cover_polling_time);
     if(cover_ctx.direction == cfg_cover_open) {
         cover_ctx.ticks_th_stop = POS_TO_TICKS(delta_pos, cfg_cover_up_time, cfg_cover_polling_time);
     } else {
@@ -222,6 +224,22 @@ static void cmd_coverSetPos(const char *topic, size_t len_topic, const char *dat
     cover_run(atoi(data));
 }
 
+static void cmd_coverTestDir(const char *topic, size_t len_topic, const char *data, size_t len_data) {
+    if (len_data == 0 && !data) {
+        ESP_LOGE(TAG, "Invalid paylod in cover set");
+        return;
+    }
+
+    int dir = atoi(data);
+
+    TRIAC_DIRECTION(dir);
+    TRIAC_ON();
+    ESP_LOGI(TAG, "Run on DIR[%d]", dir);
+    DELAY_S(5);
+    ESP_LOGI(TAG, "Stop on DIR[%d]", dir);
+    TRIAC_OFF();
+}
+
 static void cmd_coverSet(const char *topic, size_t len_topic, const char *data, size_t len_data) {
     if (len_data == 0 && !data) {
         ESP_LOGE(TAG, "Invalid paylod in cover set");
@@ -272,6 +290,7 @@ static void on_button_down(button_t *btn, button_state_t state)
 static CmdMQTT callback_table[] = {
     { COVER_TOPIC_SET     , cmd_coverSet    } ,
     { COVER_TOPIC_SET_POS , cmd_coverSetPos } ,
+    { COVER_TOPIC_TEST_DIR, cmd_coverTestDir} ,
     { NULL                , NULL    },
 };
 
