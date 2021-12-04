@@ -36,9 +36,9 @@ cmds = [
 
 
 NODEIDs = [
-    "Node_85d904",
+    "Node_85d94",
     "Node_f4a98f",
-    "Node_513b66"
+    "Node_513b66",
 ]
 TOPIC = 0
 PAYLOAD = 1
