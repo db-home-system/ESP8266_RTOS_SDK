@@ -46,3 +46,6 @@ docs/doxygen_sqlite3.db
 server_certs/
 radiolog_app.bin
 tags
+.cache
+.vim
+compile_commands.json
