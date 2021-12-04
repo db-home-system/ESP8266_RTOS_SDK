@@ -225,6 +225,6 @@ void measure_init(QueueHandle_t *queue) {
     }
 
 exit:
-    xTaskCreate(&measure, "device_measure_task", 8192, NULL, 10, NULL);
+    xTaskCreate(&measure, "device_measure_task", 8192, NULL, 5, NULL);
 }
 

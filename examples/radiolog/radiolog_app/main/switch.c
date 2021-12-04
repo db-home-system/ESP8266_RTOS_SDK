@@ -176,6 +176,6 @@ void switch_init(QueueHandle_t *queue) {
     SWITCH_OFF();
     is_switch_on = false;
 
-    xTaskCreate(&switch_status, "device_switch_task", 8192, NULL, 10, NULL);
+    xTaskCreate(&switch_status, "device_switch_task", 8192, NULL, 5, NULL);
 }
 

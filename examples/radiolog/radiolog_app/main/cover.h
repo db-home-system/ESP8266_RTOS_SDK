@@ -11,11 +11,12 @@
 #include "freertos/semphr.h"
 #include "freertos/queue.h"
 
-#define COVER_TOPIC_STATUS    "cover/status"
-#define COVER_TOPIC_POS       "cover/position"
-#define COVER_TOPIC_SET_POS   "cover/set/position"
-#define COVER_TOPIC_SET       "cover/set"
-#define COVER_TOPIC_TEST_DIR  "cover/test/direction"
+#define COVER_TOPIC_STATUS     "cover/status"
+#define COVER_TOPIC_STATUS_LOG "cover/status/log"
+#define COVER_TOPIC_POS        "cover/position"
+#define COVER_TOPIC_SET_POS    "cover/set/position"
+#define COVER_TOPIC_SET        "cover/set"
+#define COVER_TOPIC_TEST_DIR   "cover/test/direction"
 
 
 typedef struct CoverCtx cover_ctx_t;

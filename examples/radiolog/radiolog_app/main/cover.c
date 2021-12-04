@@ -273,6 +273,16 @@ static void on_button_up(button_t *btn, button_state_t state)
     if (state == BUTTON_RELEASED) {
         cover_stop();
     }
+
+    mqttmsg_t jmsg;
+    jmsg.json_str_len = sprintf((char *)&jmsg.json_str,
+            "{\"btn\":\"up\",\"status\":\"%s\"}", state == BUTTON_RELEASED ? "released" : "pressed");
+
+    if (jmsg.json_str_len != ESP_FAIL) {
+        strcpy(jmsg.topic, COVER_TOPIC_STATUS_LOG);
+        jmsg.topic_len = sizeof(COVER_TOPIC_STATUS_LOG);
+        xQueueSend(*cover_module_queue, (void *)&jmsg, (TickType_t)10);
+    }
 }
 
 static void on_button_down(button_t *btn, button_state_t state)
@@ -284,6 +294,16 @@ static void on_button_down(button_t *btn, button_state_t state)
 
     if (state == BUTTON_RELEASED) {
         cover_stop();
+    }
+
+    mqttmsg_t jmsg;
+    jmsg.json_str_len = sprintf((char *)&jmsg.json_str,
+            "{\"btn\":\"down\",\"status\":\"%s\"}", state == BUTTON_RELEASED ? "released" : "pressed");
+
+    if (jmsg.json_str_len != ESP_FAIL) {
+        strcpy(jmsg.topic, COVER_TOPIC_STATUS_LOG);
+        jmsg.topic_len = sizeof(COVER_TOPIC_STATUS_LOG);
+        xQueueSend(*cover_module_queue, (void *)&jmsg, (TickType_t)10);
     }
 }
 
