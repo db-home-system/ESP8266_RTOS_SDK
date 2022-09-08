@@ -73,7 +73,7 @@ static void switch_sendStatus(void) {
 static void switch_status(void * pvParameter) {
     while(1) {
         switch_sendStatus();
-        DELAY_S(10);
+        DELAY_S(2);
     }
 }
 
