@@ -79,30 +79,25 @@ static void switch_status(void * pvParameter) {
 
 static void switch_on(bool on)
 {
-    if (on) {
-        if (cfg_switch_mode == CFG_SWITCH_MAKE_PULSE) {
-            SWITCH_PULSE(cfg_switch_pulse_width);
-        } else {
-            SWITCH_ON();
-        }
-
-        is_switch_on = true;
-
-    } else {
-        if (cfg_switch_mode == CFG_SWITCH_MAKE_PULSE) {
-            SWITCH_PULSE(cfg_switch_pulse_width);
-        } else {
-            SWITCH_OFF();
-        }
-
-        is_switch_on = false;
+  if (cfg_switch_mode == CFG_SWITCH_MAKE_PULSE) {
+    if (!(is_switch_on && on)) {
+      SWITCH_PULSE(cfg_switch_pulse_width);
     }
+  } else {
+    if (on) {
+      SWITCH_ON();
+    } else {
+      SWITCH_OFF();
+    }
+  }
 
-    ESP_LOGE(TAG, "Set switch[%d]", is_switch_on);
-    switch_sendStatus();
+  ESP_LOGE(TAG, "Set switch[%d]", on);
+  switch_sendStatus();
+  DELAY_MS(100);
 }
 
 static void cmd_switch(const char *topic, size_t len_topic, const char *data, size_t len_data) {
+
     if (len_data == 0 && !data) {
         ESP_LOGE(TAG, "Invalid paylod in switch set");
         return;
@@ -117,6 +112,7 @@ static void cmd_switch(const char *topic, size_t len_topic, const char *data, si
         switch_on(false);
         return;
     }
+
     ESP_LOGE(TAG, "invalid option");
 }
 
